@@ -1,3 +1,27 @@
+/******************************************************************************
+MIT License
+
+Copyright(c) 2018 IvanKostruba
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files(the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions :
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+******************************************************************************/
+
 #pragma once
 
 #include "event_bus.h"
@@ -8,50 +32,6 @@
 #include <exception>
 
 /// This header contains utility methods for distributing events between producers/consumers, who are unaware of each other.
-
-/// Any type can be an event, and all that's needed to process it is another class with void Handle() method,
-/// accepting that type. Dispatcher will automatically find proper consumer and pass the event to it.
-///
-/// Example:
-///
-///  // Event
-///  struct MyEvent
-///  {
-///    std::string data{"Hello world!"};
-///  };
-///
-///  // Consumer
-///  class MyDomain
-///  {
-///  public:
-///    void Handle(MyEvent event) { std::cout << event.data << "\n"; }
-///  };
-///
-///  // Let the global dispatcher know about your new consumer
-///  class GlobalDispatcher : public GlobalDispatcherBase
-///  {
-///  public:
-///    ...
-///    template<typename Event>
-///    void Route(Event event) noexcept(false)
-///    {
-///      GlobalDispatcherBase::Route(std::move(event), *domainInstancePointer);
-///    }
-///  
-///  private:
-///    MyDomain* domainInstancePointer; // should be set in runtime
-///  };
-///
-///  // Now from anywhere:
-///  static_dispatch(eventBus, MyEvent{}, DomainA_instance, DomainB_instance, MyDomain_instance);
-///  dynamic_dispatch(eventBus, MyEventWithTarget{}, DomainA_instance, DomainB_instance, MyDomain_instance);
-///
-///  // or
-///
-///  globalDispatcher.Route( MyEvent{} );
-///
-///  And MyDomain instance will have it! That's it.
-
 namespace catbus {
 
 //--------------------- SFINAE event handler detector
@@ -91,16 +71,16 @@ struct has_id<Consumer, void_t<typename std::enable_if<std::is_same<decltype(Con
 
 /// This function will instantiate for classes, that do not have handler for event of type 'Event'.
 template <typename Event, class Consumer>
-bool route_event(EventCatbus& bus, Event& ev, Consumer& c,
-  typename std::enable_if<!has_handler<Consumer, Event>::value || !has_id<Consumer>::value, int>::type = 0)
+typename std::enable_if<!has_handler<Consumer, Event>::value || !has_id<Consumer>::value, bool>::type
+route_event(EventCatbus& bus, Event& ev, Consumer& c)
 {
   return false;
 }
 
 /// This function will instantiate for classes, that have handler given event.
 template <typename Event, class Consumer>
-bool route_event(EventCatbus& bus, Event& ev, Consumer& c,
-  typename std::enable_if<has_handler<Consumer, Event>::value && has_id<Consumer>::value, int>::type = 0)
+typename std::enable_if<has_handler<Consumer, Event>::value && has_id<Consumer>::value, bool>::type
+route_event(EventCatbus& bus, Event& ev, Consumer& c)
 {
   if (c.id_ != ev.target)
   {
@@ -179,8 +159,8 @@ constexpr size_t find_handler_idx(size_t idx = 0)
 
 /// Consumer does not have id, so event processing is scheduled to any thread
 template <typename Event, class Consumer>
-void static_route(EventCatbus& bus, Event& ev, Consumer& c,
-  typename std::enable_if<!has_id<Consumer>::value, int>::type = 0)
+typename std::enable_if<!has_id<Consumer>::value, void>::type
+static_route(EventCatbus& bus, Event& ev, Consumer& c)
 {
   bus.Send(
     [&consumer = c,
@@ -193,8 +173,8 @@ void static_route(EventCatbus& bus, Event& ev, Consumer& c,
 
 /// Consumer has id, so event processing is scheduled to specific thread
 template <typename Event, class Consumer>
-void static_route(EventCatbus& bus, Event& ev, Consumer& c,
-  typename std::enable_if<has_id<Consumer>::value, int>::type = 0)
+typename std::enable_if<has_id<Consumer>::value, void>::type
+static_route(EventCatbus& bus, Event& ev, Consumer& c)
 {
   bus.Send(
     c.id_,
