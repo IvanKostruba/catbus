@@ -30,6 +30,15 @@
     <ClInclude Include="event_catbus\global_dispatcher.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="event_catbus\exception.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="event_catbus\worker_mutex.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="event_catbus\worker_lock_free.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">

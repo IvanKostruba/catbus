@@ -24,14 +24,15 @@ public:
 };
 
 // Let the global dispatcher know about your new consumer
-class GlobalDispatcher : public GlobalDispatcherBase
+using WorkerType = WorkerUnitMutex;
+class GlobalDispatcher : public GlobalDispatcherBase<WorkerType>
 {
 public:
   ...
   template<typename Event>
   void Route(Event event) noexcept(false)
   {
-    GlobalDispatcherBase::Route(std::move(event), *domainInstancePointer);
+    GlobalDispatcherBase<WorkerType>::Route(std::move(event), *domainInstancePointer);
   }
 
 private:

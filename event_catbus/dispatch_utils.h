@@ -25,11 +25,11 @@ SOFTWARE.
 #pragma once
 
 #include "event_bus.h"
+#include "exception.h"
 
 #include <tuple>
 #include <type_traits>
 #include <utility>
-#include <exception>
 
 /// This header contains utility methods for distributing events between producers/consumers, who are unaware of each other.
 namespace catbus {
@@ -70,17 +70,17 @@ struct has_id<Consumer, void_t<typename std::enable_if<std::is_same<decltype(Con
 //--------------------- SFINAE handler caller for specific target
 
 /// This function will instantiate for classes, that do not have handler for event of type 'Event'.
-template <typename Event, class Consumer>
+template <typename Worker, typename Event, class Consumer>
 typename std::enable_if<!has_handler<Consumer, Event>::value || !has_id<Consumer>::value, bool>::type
-route_event(EventCatbus& bus, Event& ev, Consumer& c)
+route_event(EventCatbus<Worker>& bus, Event& ev, Consumer& c)
 {
   return false;
 }
 
 /// This function will instantiate for classes, that have handler given event.
-template <typename Event, class Consumer>
+template <typename Worker, typename Event, class Consumer>
 typename std::enable_if<has_handler<Consumer, Event>::value && has_id<Consumer>::value, bool>::type
-route_event(EventCatbus& bus, Event& ev, Consumer& c)
+route_event(EventCatbus<Worker>& bus, Event& ev, Consumer& c)
 {
   if (c.id_ != ev.target)
   {
@@ -97,30 +97,10 @@ route_event(EventCatbus& bus, Event& ev, Consumer& c)
   return true;
 }
 
-//--------------------- Dynamic dispatcher exception
-
-class dispatch_error : public std::exception
-{
-public:
-  const size_t target_id_;
-
-  dispatch_error(size_t target_id) : target_id_{target_id}
-  {
-  }
-
-  const char* what() const noexcept override
-  {
-    return description;
-  }
-
-private:
-  const char* description = "No consumers with corresponding id were found";
-};
-
 //--------------------- Dynamic runtime dispatcher
 
-template <typename Event, class Consumer>
-void dynamic_dispatch(EventCatbus& bus, Event ev, Consumer& c) noexcept(false)
+template <typename Worker, typename Event, class Consumer>
+void dynamic_dispatch(EventCatbus<Worker>& bus, Event ev, Consumer& c) noexcept(false)
 {
   static_assert(has_target<Event>::value, "Event does not have 'size_t target' member.");
   if (!route_event(bus, ev, c))
@@ -130,8 +110,8 @@ void dynamic_dispatch(EventCatbus& bus, Event ev, Consumer& c) noexcept(false)
 }
 
 /// Recursively search parameter pack for types with handlers for given event, call handler for one, that has corresponding id.
-template <typename Event, class Consumer, class ...Consumers>
-void dynamic_dispatch(EventCatbus& bus, Event ev, Consumer& c, Consumers&... others) noexcept(false)
+template <typename Worker, typename Event, class Consumer, class ...Consumers>
+void dynamic_dispatch(EventCatbus<Worker>& bus, Event ev, Consumer& c, Consumers&... others) noexcept(false)
 {
   static_assert(has_target<Event>::value, "Event does not have 'size_t target' member.");
   if (!route_event(bus, ev, c))
@@ -158,9 +138,9 @@ constexpr size_t find_handler_idx(size_t idx = 0)
 //--------------------- Static compile-time dispatcher
 
 /// Consumer does not have id, so event processing is scheduled to any thread
-template <typename Event, class Consumer>
+template <typename Worker, typename Event, class Consumer>
 typename std::enable_if<!has_id<Consumer>::value, void>::type
-static_route(EventCatbus& bus, Event& ev, Consumer& c)
+static_route(EventCatbus<Worker>& bus, Event& ev, Consumer& c)
 {
   bus.Send(
     [&consumer = c,
@@ -172,9 +152,9 @@ static_route(EventCatbus& bus, Event& ev, Consumer& c)
 }
 
 /// Consumer has id, so event processing is scheduled to specific thread
-template <typename Event, class Consumer>
+template <typename Worker, typename Event, class Consumer>
 typename std::enable_if<has_id<Consumer>::value, void>::type
-static_route(EventCatbus& bus, Event& ev, Consumer& c)
+static_route(EventCatbus<Worker>& bus, Event& ev, Consumer& c)
 {
   bus.Send(
     c.id_,
@@ -187,19 +167,12 @@ static_route(EventCatbus& bus, Event& ev, Consumer& c)
 }
 
 /// Call handler for first consumer in parameter pack, that capable of handling the event.
-template<typename Event, class ...Consumers>
-void static_dispatch(EventCatbus& bus, Event ev, Consumers& ...args)
+template<typename Worker, typename Event, class ...Consumers>
+void static_dispatch(EventCatbus<Worker>& bus, Event ev, Consumers& ...args)
 {
   static_assert(std::tuple_size<std::tuple<Consumers...>>::value > find_handler_idx<Event, Consumers...>(), "Handler not found!");
   std::tuple<Consumers&...> list{ args... };
   static_route(bus, ev, std::get<find_handler_idx<Event, Consumers...>()>(list));
-}
-
-/// Helper function to get unique object id
-size_t get_unique_id()
-{
-  static size_t current_id;
-  return current_id++;
 }
 
 /// Helper function to create task which passes event to handler, produced by factory function

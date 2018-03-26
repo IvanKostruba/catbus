@@ -37,10 +37,12 @@ namespace catbus {
 /// It's not possible to store some callable object, incapsulating this information,
 /// because events do not have specific type, and it's impossible to have
 /// std::function < void( auto) >
+
+template<typename Worker>
 class GlobalDispatcherBase
 {
 public:
-  GlobalDispatcherBase(EventCatbus& global_bus) : global_bus_{ global_bus } {};
+  GlobalDispatcherBase(EventCatbus<Worker>& global_bus) : global_bus_{ global_bus } {};
 
   template<typename Event, typename ...Ts>
   typename std::enable_if_t<has_target<Event>::value> Route(Event event, Ts& ...consumers) noexcept(false)
@@ -55,7 +57,7 @@ public:
   }
 
 private:
-  EventCatbus & global_bus_;
+  EventCatbus<Worker>& global_bus_;
 };
 
 }; // namespace catbus
