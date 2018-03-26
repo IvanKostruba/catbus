@@ -11,12 +11,14 @@ accepting that type. Dispatcher will automatically find proper consumer and pass
 Example:
 
 // Event
+
 struct MyEvent
 {
   std::string data{"Hello world!"};
 };
 
 // Consumer
+
 class MyDomain
 {
 public:
@@ -24,6 +26,7 @@ public:
 };
 
 // Let the global dispatcher know about your new consumer
+
 using WorkerType = WorkerUnitMutex;
 class GlobalDispatcher : public GlobalDispatcherBase<WorkerType>
 {
@@ -40,8 +43,11 @@ private:
 };
 
 // Now from anywhere:
+
 globalDispatcher.Route( MyEvent{} );
+
 // or
+
 static_dispatch(eventBus, MyEvent{}, DomainA_instance, DomainB_instance, MyDomain_instance);
 dynamic_dispatch(eventBus, MyEventWithTarget{}, DomainA_instance, DomainB_instance, MyDomain_instance);
 
