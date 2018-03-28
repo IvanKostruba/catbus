@@ -28,8 +28,6 @@ SOFTWARE.
 
 namespace catbus {
 
-class WorkerUnitMutex;
-
 /// Contains one or more WorkerUnits and schedules tasks between them.
 
 /// Main scheduling principle - tasks for consumer with id will be scheduled to
@@ -38,7 +36,7 @@ template<typename Worker>
 class EventCatbus
 {
 public:
-  EventCatbus( size_t pool_size = 0 )
+  explicit EventCatbus( size_t pool_size = 0 )
   {
     size_t worker_count = pool_size ? pool_size : std::thread::hardware_concurrency();
     workers_ = new Worker[worker_count];

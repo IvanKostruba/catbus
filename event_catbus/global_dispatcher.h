@@ -38,11 +38,12 @@ namespace catbus {
 /// because events do not have specific type, and it's impossible to have
 /// std::function < void( auto) >
 
-template<typename Worker>
+template<typename BusType>
 class GlobalDispatcherBase
 {
 public:
-  GlobalDispatcherBase(EventCatbus<Worker>& global_bus) : global_bus_{ global_bus } {};
+  explicit GlobalDispatcherBase(size_t thread_pool_size) : global_bus_{ thread_pool_size } 
+  {}
 
   template<typename Event, typename ...Ts>
   typename std::enable_if_t<has_target<Event>::value> Route(Event event, Ts& ...consumers) noexcept(false)
@@ -56,8 +57,18 @@ public:
     static_dispatch(global_bus_, std::move(event), consumers...);
   }
 
+  void Send(std::function<void()> task)
+  {
+    global_bus_.Send(std::move(task));
+  }
+
+  void Send(size_t agent_id, std::function<void()> task)
+  {
+    global_bus_.Send(agent_id, std::move(task));
+  }
+
 private:
-  EventCatbus<Worker>& global_bus_;
+  BusType global_bus_;
 };
 
 }; // namespace catbus
