@@ -40,6 +40,7 @@ namespace catbus {
   *  Queue here is a lock-free ring buffer. Exception is thrown in case of overflow.
   *  This might be useful when system has millions of fast-processing event per second.
   */
+  // TODO: make queue size configurable and provide different policies on overflow: throw or grow.
   class WorkerUnitLockFree
   {
   public:
