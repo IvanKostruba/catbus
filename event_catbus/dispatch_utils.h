@@ -45,7 +45,7 @@ template<class T, class Event, class = void>
 struct has_handler : std::false_type {};
 
 template<class T, class Event>
-struct has_handler<T, Event, void_t<decltype(std::declval<T>().Handle(std::declval<Event>()), (void)0)>> : std::true_type {};
+struct has_handler<T, Event, void_t<decltype(std::declval<T>().Handle(std::declval<Event>()))>> : std::true_type {};
 
 //--------------------- SFINAE event target id detector
 
