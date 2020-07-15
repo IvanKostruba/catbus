@@ -32,7 +32,7 @@ namespace catbus {
 
 /// Main scheduling principle - tasks for consumer with id will be scheduled to
 /// the same worker based on id to prevent reordering.
-// TODO: add thread mointoring option, so that thread occupied for too long would
+// TODO: add thread monitoring option, so that thread occupied for too long would
 // be replaced with another one, and have it's queue transferred to the new thread.
 template<typename Worker>
 class EventCatbus

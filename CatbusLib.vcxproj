@@ -23,7 +23,7 @@
     <ProjectGuid>{12EE5D48-7CA8-43B4-A48F-0D36F625E79A}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>DispatchLib</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.16299.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.17134.0</WindowsTargetPlatformVersion>
     <ProjectName>CatbusLib</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -107,6 +107,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(SolutionDir)event_catbus;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -153,8 +154,8 @@
   <ItemGroup>
     <ClInclude Include="event_catbus\dispatch_utils.h" />
     <ClInclude Include="event_catbus\event_bus.h" />
+    <ClInclude Include="event_catbus\event_sender.h" />
     <ClInclude Include="event_catbus\exception.h" />
-    <ClInclude Include="event_catbus\global_dispatcher.h" />
     <ClInclude Include="event_catbus\worker_lock_free.h" />
     <ClInclude Include="event_catbus\worker_mutex.h" />
     <ClInclude Include="stdafx.h" />

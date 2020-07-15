@@ -55,7 +55,7 @@ template<class Event, class = void>
 struct has_target : std::false_type {};
 
 template<class Event>
-struct has_target<Event, void_t<typename std::enable_if<std::is_same<decltype(Event::target), size_t>::value>::type>> : std::true_type {};
+struct has_target<Event, void_t<std::enable_if_t<std::is_same_v<decltype(Event::target), size_t>>>> : std::true_type {};
 
 //--------------------- SFINAE consumer id detector
 
@@ -65,36 +65,46 @@ template<class Consumer, class = void>
 struct has_id : std::false_type {};
 
 template<class Consumer>
-struct has_id<Consumer, void_t<typename std::enable_if<std::is_same<decltype(Consumer::id_), const size_t>::value>::type>> : std::true_type {};
+struct has_id<Consumer, void_t<std::enable_if_t<std::is_same_v<decltype(Consumer::id_), const size_t>>>> : std::true_type {};
+
+//--------------------- SFINAE consumer affinity detector
+
+/// Check if type Consumer has member 'const size_t affinity_'.
+
+template<class Consumer, class = void>
+struct has_affinity : std::false_type {};
+
+template<class Consumer>
+struct has_affinity<Consumer, void_t<std::enable_if_t<std::is_same_v<decltype(Consumer::affinity_), const size_t>>>> : std::true_type {};
 
 //--------------------- SFINAE handler caller for specific target
 
-/// This function will instantiate for classes, that do not have handler for event of type 'Event'.
-template <typename Worker, typename Event, class Consumer>
-typename std::enable_if<!has_handler<Consumer, Event>::value || !has_id<Consumer>::value, bool>::type
-route_event(EventCatbus<Worker>& bus, Event& ev, Consumer& c)
-{
-  return false;
-}
-
 /// This function will instantiate for classes, that have handler given event.
 template <typename Worker, typename Event, class Consumer>
-typename std::enable_if<has_handler<Consumer, Event>::value && has_id<Consumer>::value, bool>::type
-route_event(EventCatbus<Worker>& bus, Event& ev, Consumer& c)
+bool route_event(EventCatbus<Worker>& bus, Event& ev, Consumer& c)
 {
-  if (c.id_ != ev.target)
+  if constexpr (has_handler<Consumer, Event>::value && has_id<Consumer>::value)
   {
-    return false;
-  }
-  bus.Send(
-    c.id_,
-    [ &consumer = c,
-      event{ std::move(ev) } ]
-    () mutable -> void
+    if (c.id_ != ev.target)
     {
-      consumer.Handle( std::move( event ) );
-    } );
-  return true;
+      return false;
+    }
+    auto l = [&consumer = c, event{ std::move(ev) }] () mutable -> void
+      {
+        consumer.Handle(std::move(event));
+      };
+    if constexpr (!has_affinity<Consumer>::value)
+    {
+      bus.Send(std::move(l));
+      return true;
+    }
+    else
+    {
+      bus.Send(c.affinity_, std::move(l));
+      return true;
+    }
+  }
+  return false;
 }
 
 //--------------------- Dynamic runtime dispatcher
@@ -139,31 +149,20 @@ constexpr size_t find_handler_idx(size_t idx = 0)
 
 /// Consumer does not have id, so event processing is scheduled to any thread
 template <typename Worker, typename Event, class Consumer>
-typename std::enable_if<!has_id<Consumer>::value, void>::type
-static_route(EventCatbus<Worker>& bus, Event& ev, Consumer& c)
+void static_route(EventCatbus<Worker>& bus, Event& ev, Consumer& c)
 {
-  bus.Send(
-    [&consumer = c,
-    event { std::move(ev) }]
-  () mutable -> void
+  auto l = [&consumer = c, event{ std::move(ev) }] () mutable -> void
+    {
+      consumer.Handle(std::move(event));
+    };
+  if constexpr (!has_affinity<Consumer>::value)
   {
-    consumer.Handle(std::move(event));
-  });
-}
-
-/// Consumer has id, so event processing is scheduled to specific thread
-template <typename Worker, typename Event, class Consumer>
-typename std::enable_if<has_id<Consumer>::value, void>::type
-static_route(EventCatbus<Worker>& bus, Event& ev, Consumer& c)
-{
-  bus.Send(
-    c.id_,
-    [&consumer = c,
-    event { std::move(ev) }]
-  () mutable -> void
+    bus.Send(std::move(l));
+  }
+  else
   {
-    consumer.Handle(std::move(event));
-  });
+    bus.Send(c.affinity_, std::move(l));
+  }
 }
 
 /// Call handler for first consumer in parameter pack, that capable of handling the event.
