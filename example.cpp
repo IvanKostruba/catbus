@@ -17,7 +17,7 @@ struct Request
 
 struct Response
 {
-  const size_t target;
+  size_t target;
   int error_code;
 };
 
