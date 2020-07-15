@@ -49,6 +49,7 @@ namespace catbus {
         }
       }, 0) ...
     };
+    discard = {}; // suppress -Wunused-variable
   }
 
 }; // namespace catbus

@@ -25,6 +25,7 @@ SOFTWARE.
 #pragma once
 
 #include <functional>
+#include <thread>
 
 namespace catbus {
 
