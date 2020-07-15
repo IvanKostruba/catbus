@@ -25,10 +25,6 @@ SOFTWARE.
 // DispatchLib.cpp : Defines the entry point for the console application.
 //
 
-#ifdef _WIN32
-#include "stdafx.h"
-#endif
-
 #include "dispatch_utils.h"
 #include "worker_mutex.h"
 #include "worker_lock_free.h"
