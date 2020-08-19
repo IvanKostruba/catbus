@@ -4,7 +4,7 @@ Lightweight framework for event-driven systems
 This is a header-only library, it resides fully in event_catbus directory. VS solution is just a test application for the library.
 
 ## event_bus.h
-Contains `EventCatbus` class which implements a pool of worker threads where event handling will run. Based on 'Active Objects' pattern.
+Contains `EventCatbus` class which incapsulates set of queues and a pool of worker threads where event handling will run.
 
 ## dispatch_utils.h
 Provide some helper functions and types, mainly `static_dispatch()` and `dynamic_dispatch()` that can be used directly to route events between consumers.
