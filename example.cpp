@@ -3,7 +3,7 @@
 #include "dispatch_utils.h"
 #include "event_bus.h"
 #include "event_sender.h"
-#include "worker_mutex.h"
+#include "queue_mutex.h"
 
 #include <iostream>
 
@@ -56,13 +56,14 @@ public:
 
 int main(int argc, char** argv) {
   // Initialization
-  catbus::EventCatbus<catbus::WorkerUnitMutex> bus{2}; // The threads where handlers will run
+  // Here the queues for events and threads for handlers execution will live.
+  catbus::EventCatbus<catbus::MutexProtectedQueue, 1, 2> bus;
   Sender sender{1};
   Receiver receiver;
-  catbus::setup_dispatch(bus, sender, receiver); // Setting up Send() methods
+  catbus::setup_dispatch(bus, sender, receiver); // Setting up Send() methods.
 
   // Startup
-  catbus::static_dispatch(bus, Init{}, sender); // Send the initial event
+  catbus::static_dispatch(bus, Init{}, sender); // Send the initial event.
   std::this_thread::sleep_for(200ms);
 }
 

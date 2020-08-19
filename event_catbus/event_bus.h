@@ -24,17 +24,16 @@ SOFTWARE.
 
 #pragma once
 
+#include <array>
 #include <functional>
 #include <system_error>
 #include <thread>
 
-#include <iostream>
-
 namespace catbus {
 
-/// Contains one or more worker threads and queues and schedules tasks between them.
+// Incapsulates worker threads and queues and enqueues tasks.
 
-template<typename Queue, size_t NQ = 1, size_t NW = 1>
+template<typename Queue, size_t NQ, size_t NWrk>
 class EventCatbus
 {
 public:
@@ -46,10 +45,19 @@ public:
     }
   }
 
-  /// Schedules work by simple round-robin algorithm.
+  ~EventCatbus()
+  {
+    for (auto& worker : workers_)
+    {
+      worker.stop_ = true;
+    }
+  }
+
+  // Enqueues tasks with simple round-robin algorithm.
   void Send(std::function<void()> task)
   {
-    std::cout << "Sent to " << ((dispatch_counter_ + 1) % queues_.size()) << "\n";
+    // std::move is used throughout the library and here as well to avoid copying of events,
+    // this is why it's hard to implement try_enqueue() so we are risking some waiting here.
     queues_[++dispatch_counter_ % queues_.size()].Enqueue( std::move( task ) );
   }
 
@@ -72,7 +80,7 @@ private:
         {
           while (!stop)
           {
-            for(size_t i = primary; i < primary + NQ; ++i)
+            for(size_t i = primary; !stop && i < primary + NQ; ++i)
             {
               auto task = (*queues)[i % NQ].TryDequeue();
               if (task)
@@ -88,7 +96,6 @@ private:
 
     ~Worker()
     {
-      stop_ = true;
       if (thread_.joinable())
       {
         try
@@ -108,7 +115,7 @@ private:
   };
 
   size_t dispatch_counter_{};
-  std::array<Worker, NW> workers_;
+  std::array<Worker, NWrk> workers_;
   std::array<Queue, NQ> queues_;
 };
 

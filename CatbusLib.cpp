@@ -26,11 +26,10 @@ SOFTWARE.
 //
 
 #include "dispatch_utils.h"
-//#include "worker_mutex.h"
-//#include "worker_lock_free.h"
 #include "event_bus.h"
 #include "event_sender.h"
 #include "queue_mutex.h"
+#include "queue_lock_free.h"
 
 #include <cassert>
 #include <iostream>
@@ -40,8 +39,8 @@ using namespace catbus;
 using namespace std::chrono_literals;
 
 // TEST EVENTS
-// constructors specified only for testing
 
+// Event without 'target' field is used to test static dispatch.
 struct Event_NoTarget
 {
   Event_NoTarget() = default;
@@ -52,6 +51,7 @@ struct Event_NoTarget
   Event_NoTarget& operator=(const Event_NoTarget&) = delete;
 };
 
+// Event with 'target' is dispatched dynamically by comparing with counsumer 'id' field.
 struct Event_WithTarget
 {
   Event_WithTarget(size_t id) : target{id} {}
@@ -64,6 +64,7 @@ struct Event_WithTarget
   size_t target;
 };
 
+// Processing of this events in test consumers triggers sleep, imitating some long operation.
 struct Event_BlockerWithTarget
 {
   Event_BlockerWithTarget(size_t id) : target{ id } {}
@@ -76,6 +77,7 @@ struct Event_BlockerWithTarget
   size_t target;
 };
 
+// Processing of this events in test consumers triggers sleep, imitating some long operation.
 struct Event_BlockerNoTarget
 {
   Event_BlockerNoTarget() = default;
@@ -86,6 +88,7 @@ struct Event_BlockerNoTarget
   Event_BlockerNoTarget& operator=(const Event_BlockerNoTarget&) = delete;
 };
 
+// Initialize event producer that in turn will send some other events.
 struct Event_InitProducer
 {
   explicit Event_InitProducer(size_t i) : data{ i } {}
@@ -100,6 +103,7 @@ struct Event_InitProducer
 
 // TEST CONSUMERS
 
+// Used to test static dispatching of events, based on event type and handler method signature.
 class Consumer_NoId_Waits_NoTargetEvt : public EventSender<>
 {
 public:
@@ -122,6 +126,7 @@ public:
   }
 };
 
+// Deliberately broken consumer, used to test exceptions on failed dispatch.
 class Consumer_NoId_Waits_TargetEvt
 {
 public:
@@ -131,24 +136,24 @@ public:
 
   int target_evt_handled{ 0 };
 
-  // In fact, it can never work, events with target can only be dispatched to consumers with id.
+  // Even though it has handler, events with target can only be dispatched to consumers with id_.
   void Handle(Event_WithTarget ev)
   {
     ++target_evt_handled;
   }
 };
 
-class Consumer_Id_Affinity_Waits_TargetEvt : public EventSender<>
+// Proper consumer for targeted events, used to test positive scenarios.
+class Consumer_Id_Waits_TargetEvt : public EventSender<>
 {
 public:
-  Consumer_Id_Affinity_Waits_TargetEvt(size_t id, size_t affinity)
-    : id_{ id }, affinity_{ affinity }
+  explicit Consumer_Id_Waits_TargetEvt(size_t id)
+    : id_{ id }
   {}
-  Consumer_Id_Affinity_Waits_TargetEvt(const Consumer_Id_Affinity_Waits_TargetEvt&) = delete;
-  Consumer_Id_Affinity_Waits_TargetEvt(Consumer_Id_Affinity_Waits_TargetEvt&&) = delete;
+  Consumer_Id_Waits_TargetEvt(const Consumer_Id_Waits_TargetEvt&) = delete;
+  Consumer_Id_Waits_TargetEvt(Consumer_Id_Waits_TargetEvt&&) = delete;
 
   const size_t id_;
-  const size_t affinity_;
   int target_evt_handled{ 0 };
   int blocker_received{ 0 };
 
@@ -164,6 +169,8 @@ public:
   }
 };
 
+// This consumer has id_ for only reason - to test another dispatch failure when event has target,
+// and dispatch function could find consumer by id_, but it lacks proper handler.
 class Consumer_Id_Waits_NoTargetEvt
 {
 public:
@@ -180,27 +187,13 @@ public:
   }
 };
 
-class Consumer_FromFactory
-{
-public:
-  Consumer_FromFactory() = default;
-  Consumer_FromFactory(const Consumer_FromFactory&) = delete;
-  Consumer_FromFactory(Consumer_FromFactory&&) = delete;
-
-  int event_handled{ 0 };
-
-  void Handle(Event_NoTarget ev)
-  {
-    ++event_handled;
-  }
-};
-
+// Event producer is used to test automatic setup of event sender methods.
 class Producer : public EventSender<Event_BlockerNoTarget, Event_BlockerWithTarget, Event_NoTarget, Event_WithTarget>
 {
 public:
   Producer() = default;
-  Producer(const Consumer_FromFactory&) = delete;
-  Producer(Consumer_FromFactory&&) = delete;
+  Producer(const Producer&) = delete;
+  Producer(Producer&&) = delete;
 
   int event_handled{ 0 };
 
@@ -215,17 +208,51 @@ public:
     else
     {
       Send(Event_BlockerWithTarget{ ev.data });
+      std::this_thread::sleep_for(10ms); // See comment for OrderedScheduling().
       Send(Event_WithTarget{ ev.data });
     }
   }
 };
 
+// This consumer forwards the events to another bus, that dispatches them into another bus.
+// In this case this second bus has only one thread, so it processes events in the order it
+// received them, though of course it can be different from order in which they were produced,
+// because events potentially travel through several different queues and served by different
+// threads. But if events are produced with big enough time gap, it's enough to guarantee
+// correct sequence.
+class OrderedEventsProcessor : public EventSender<>
+{
+public:
+  explicit OrderedEventsProcessor(size_t id)
+    : id_{ id }
+  {}
+  OrderedEventsProcessor(const OrderedEventsProcessor&) = delete;
+  OrderedEventsProcessor(OrderedEventsProcessor&&) = delete;
+
+  const size_t id_;
+  int target_evt_handled{ 0 };
+  int blocker_received{ 0 };
+  Consumer_Id_Waits_TargetEvt final_consumer_{ 1 };
+  EventCatbus<MutexProtectedQueue, 1, 1> processor_;
+
+  void Handle(Event_WithTarget ev)
+  {
+    dynamic_dispatch(processor_, std::move(ev), final_consumer_);
+  }
+
+  void Handle(Event_BlockerWithTarget ev)
+  {
+    dynamic_dispatch(processor_, std::move(ev), final_consumer_);
+  }
+};
+
 // TEST FUNCTIONS
 
-/// Used for events without "size_t target" field.
+// Static dispatch is used for events without 'target' field. Type of event and signatures of
+// potential handler methods are compared.
 bool BasicStaticDispatch()
 {
-  EventCatbus<QueueMutex, 1, 1> catbus;
+  EventCatbus<MutexProtectedQueue, 1, 1> catbus;
   Consumer_NoId_Waits_NoTargetEvt A;
   Consumer_NoId_Waits_TargetEvt B;
 
@@ -244,19 +271,20 @@ bool BasicStaticDispatch()
   return ok = A.no_target_evt_handled == 1 && B.target_evt_handled == 0;
 }
 
-/// Used for events with "size_t target" field.
+// If event has 'target' field, it is compared against 'id' field of potential consumers which
+// has proper handler method for given event type.
 bool BasicDynamicDispatch()
 {
-  EventCatbus<QueueMutex, 1, 1> catbus;
-  Consumer_Id_Affinity_Waits_TargetEvt A{ 1, 0 };
-  Consumer_Id_Affinity_Waits_TargetEvt B{ 2, 1 };
+  EventCatbus<SimpleLockFreeQueue<16>, 1, 1> catbus;
+  Consumer_Id_Waits_TargetEvt A{ 1 };
+  Consumer_Id_Waits_TargetEvt B{ 2 };
 
-  bool ok = has_id<Consumer_Id_Affinity_Waits_TargetEvt>::value;
+  bool ok = has_id<Consumer_Id_Waits_TargetEvt>::value;
   if (!ok)
   {
     return false;
   }
-  ok = has_handler<Consumer_Id_Affinity_Waits_TargetEvt, Event_WithTarget>::value;
+  ok = has_handler<Consumer_Id_Waits_TargetEvt, Event_WithTarget>::value;
   if (!ok)
   {
     return false;
@@ -266,20 +294,20 @@ bool BasicDynamicDispatch()
   return ok =  A.target_evt_handled == 1 && B.target_evt_handled == 0;
 }
 
-/// If candidate with proper id does not have handler for the event, exception should be thrown.
+// If candidate with proper id_ does not have handler for the event, exception should be thrown.
 bool FailedDynDispatchNoHandler()
 {
-  EventCatbus<QueueMutex, 1, 1> catbus;
-  Consumer_Id_Affinity_Waits_TargetEvt A{ 1, 0 };
+  EventCatbus<MutexProtectedQueue, 1, 1> catbus;
+  Consumer_Id_Waits_TargetEvt A{ 1 };
   Consumer_Id_Waits_NoTargetEvt B{ 2 };
 
-  bool ok = has_id<Consumer_Id_Affinity_Waits_TargetEvt>::value
+  bool ok = has_id<Consumer_Id_Waits_TargetEvt>::value
     && has_id<Consumer_Id_Waits_NoTargetEvt>::value;
   if (!ok)
   {
     return false;
   }
-  ok = has_handler<Consumer_Id_Affinity_Waits_TargetEvt, Event_WithTarget>::value
+  ok = has_handler<Consumer_Id_Waits_TargetEvt, Event_WithTarget>::value
     && !has_handler<Consumer_Id_Waits_NoTargetEvt, Event_WithTarget>::value;
   if (!ok)
   {
@@ -298,12 +326,12 @@ bool FailedDynDispatchNoHandler()
   return exception_caught;
 }
 
-/// If all candidates have proper handlers, but wrong ids, exception should be thrown.
+// If all candidates have proper handlers, but wrong ids, exception should be thrown.
 bool FailedDynDispatchNoId()
 {
-  EventCatbus<QueueMutex, 1, 1> catbus;
-  Consumer_Id_Affinity_Waits_TargetEvt A{ 2, 0 };
-  Consumer_Id_Affinity_Waits_TargetEvt B{ 1, 1 };
+  EventCatbus<SimpleLockFreeQueue<>, 1, 1> catbus;
+  Consumer_Id_Waits_TargetEvt A{ 2 };
+  Consumer_Id_Waits_TargetEvt B{ 1 };
 
   bool exception_caught{};
   try
@@ -317,10 +345,13 @@ bool FailedDynDispatchNoId()
   return exception_caught;
 }
 
-/// This scheduling used for consumers without "const size_t id_" member.
-bool RoundRobinScheduling()
+// Event bus puts events into queues with round robin algorithm. Worker thread then checks its
+// 'primary' queue and if it's empty goes to check other queues. In this test one of the threads
+// is blocked by processing Event_BlockerNoTarget issued by Producer, but the other thread still
+// picks up both Event_NoTarget events even though they are in different queues.
+bool SchedulingAndTaskStealing()
 {
-  EventCatbus<QueueMutex, 2, 2> catbus;
+  EventCatbus<SimpleLockFreeQueue<16>, 2, 2> catbus;
   Consumer_NoId_Waits_NoTargetEvt A;
   Producer P;
   setup_dispatch(catbus, A, P);
@@ -332,22 +363,24 @@ bool RoundRobinScheduling()
   return ok;
 }
 
-/// Used for consumers, who has "const size_t id_" member.
-// TODO: redesign this test, it does not make much sense now
+// Ordered processing is built by dispatching events to a separate bus with single thread.
+// If that thread is blocked, all other events that were sent there will have to wait.
+// This implemetation has its limits, it can change the order of events if they were issued in
+// quick succession.
 bool OrderedScheduling()
 {
-  EventCatbus<QueueMutex, 2, 2> catbus;
-  Consumer_Id_Affinity_Waits_TargetEvt A{ 1, 0 };
+  EventCatbus<SimpleLockFreeQueue<16>, 2, 2> catbus;
+  OrderedEventsProcessor O{ 1 };
   // Consumer B is needed because Producer can send events without target, which will be statically
   // dispatched, and compilation will fail if there would be no handlers.
   Consumer_NoId_Waits_NoTargetEvt B;
   Producer P;
-  setup_dispatch(catbus, A, B, P);
+  setup_dispatch(catbus, O, B, P);
   static_dispatch(catbus, Event_InitProducer{ 1 }, P);
 
   std::this_thread::sleep_for(100ms);
 
-  bool ok = A.blocker_received == 1 && A.target_evt_handled == 0;
+  bool ok = O.final_consumer_.blocker_received == 1 && O.final_consumer_.target_evt_handled == 0;
   return ok;
 }
 
@@ -367,10 +400,10 @@ int main()
   std::cout << "Dynamic dispatch fail due to absent handler: " << (passed ? "PASS\n" : "FAIL\n");
 
   passed = FailedDynDispatchNoId();
-  std::cout << "Dynamic dispatch fail because id not found: " << (passed ? "PASS\n" : "FAIL\n");
+  std::cout << "Dynamic dispatch fail because id is not found: " << (passed ? "PASS\n" : "FAIL\n");
 
-  passed = RoundRobinScheduling();
-  std::cout << "Round robin scheduling: " << (passed ? "PASS\n" : "FAIL\n");
+  passed = SchedulingAndTaskStealing();
+  std::cout << "Scheduling and task stealing: " << (passed ? "PASS\n" : "FAIL\n");
 
   passed = OrderedScheduling();
   std::cout << "Ordered scheduling: " << (passed ? "PASS\n" : "FAIL\n");

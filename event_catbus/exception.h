@@ -28,7 +28,7 @@ SOFTWARE.
 
 namespace catbus {
 
-  /// Dispatching function did non found receiver with id equal to target
+  // Dispatching function did not find receiver with id_ equal to target
   class dispatch_error : public std::exception
   {
   public:
@@ -47,7 +47,7 @@ namespace catbus {
     const char* description = "No consumers with corresponding id were found.";
   };
 
-  /// Lock-free queue ring buffer is full
+  // Lock-free queue ring buffer is full
   class queue_overflow : public std::exception
   {
   public:

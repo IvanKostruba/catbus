@@ -31,12 +31,13 @@ SOFTWARE.
 #include <type_traits>
 #include <utility>
 
-/// This header contains utility methods for distributing events between producers/consumers, who are unaware of each other.
+// This header contains utility methods for dispatching events to proper consumers based on the
+// handlers they are providing and potentially also target vs. id_ comparison.
 namespace catbus {
 
 //--------------------- SFINAE event handler detector
 
-/// Check if class T has method 'T::Handle(Event evt)' to process event of type Event.
+// Check if class T has method 'T::Handle(Event evt)' to process event of specific type.
 
 template<class...>
 using void_t = void;
@@ -49,7 +50,7 @@ struct has_handler<T, Event, void_t<decltype(std::declval<T>().Handle(std::declv
 
 //--------------------- SFINAE event target id detector
 
-/// Check if type Event has member 'size_t target'.
+// Check if type Event has member 'size_t target'.
 
 template<class Event, class = void>
 struct has_target : std::false_type {};
@@ -59,7 +60,7 @@ struct has_target<Event, void_t<std::enable_if_t<std::is_same_v<decltype(Event::
 
 //--------------------- SFINAE consumer id detector
 
-/// Check if type Consumer has member 'const size_t id_'.
+// Check if type Consumer has member 'const size_t id_'.
 
 template<class Consumer, class = void>
 struct has_id : std::false_type {};
@@ -69,7 +70,7 @@ struct has_id<Consumer, void_t<std::enable_if_t<std::is_same_v<decltype(Consumer
 
 //--------------------- SFINAE handler caller for specific target
 
-/// This function will instantiate for classes, that have handler given event.
+// This function will instantiate for classes, that have handler given event.
 template <typename Catbus, typename Event, class Consumer>
 bool route_event(Catbus& bus, Event& ev, Consumer& c)
 {
@@ -101,7 +102,7 @@ void dynamic_dispatch(Catbus& bus, Event ev, Consumer& c) noexcept(false)
   }
 }
 
-/// Recursively search parameter pack for types with handlers for given event, call handler for one, that has corresponding id.
+// Recursively search parameter pack for types with handlers for given event, call handler for one, that has corresponding id.
 template <typename Catbus, typename Event, class Consumer, class ...Consumers>
 void dynamic_dispatch(Catbus& bus, Event ev, Consumer& c, Consumers&... others) noexcept(false)
 {
@@ -120,7 +121,7 @@ constexpr size_t find_handler_idx(size_t idx)
   return idx;
 }
 
-/// Recursively search for type with handler for given event.
+// Recursively search for type with handler for given event.
 template<typename Event, typename Head, typename ...Ts>
 constexpr size_t find_handler_idx(size_t idx = 0)
 {
@@ -129,7 +130,7 @@ constexpr size_t find_handler_idx(size_t idx = 0)
 
 //--------------------- Static compile-time dispatcher
 
-/// Consumer does not have id, so event processing is scheduled to any thread
+// Consumer does not have id, so event processing is scheduled to any thread
 template <typename Catbus, typename Event, class Consumer>
 void static_route(Catbus& bus, Event& ev, Consumer& c)
 {
@@ -140,7 +141,7 @@ void static_route(Catbus& bus, Event& ev, Consumer& c)
   bus.Send(std::move(l));
 }
 
-/// Call handler for first consumer in parameter pack, that capable of handling the event.
+// Call handler for first consumer in parameter pack, that capable of handling the event.
 template<typename Catbus, typename Event, class ...Consumers>
 void static_dispatch(Catbus& bus, Event ev, Consumers& ...args)
 {

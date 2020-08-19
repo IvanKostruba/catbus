@@ -5,32 +5,37 @@
 #include <optional>
 #include <queue>
 
-class QueueMutex
-{
-public:
+namespace catbus {
 
-  void Enqueue(std::function<void()> task)
+  class MutexProtectedQueue
   {
-    auto lock = std::unique_lock<std::mutex>{queue_access_};
-    queue_.push(std::move(task));
-  }
+  public:
 
-  std::optional<std::function<void()>> TryDequeue()
-  {
-    auto lock = std::unique_lock<std::mutex>{queue_access_, std::defer_lock};
-    if(lock.try_lock())
+    void Enqueue(std::function<void()> task)
     {
-      if(queue_.empty()) {
-        return std::nullopt;
-      }
-      auto result = std::optional<std::function<void()>>{std::move(queue_.front())};
-      queue_.pop();
-      return result;
+      auto lock = std::unique_lock<std::mutex>{ queue_access_ };
+      queue_.push(std::move(task));
     }
-    return std::nullopt;
-  }
 
-private:
-  std::queue<std::function<void()>> queue_;
-  std::mutex queue_access_;
-};
+    std::optional<std::function<void()>> TryDequeue()
+    {
+      auto lock = std::unique_lock<std::mutex>{ queue_access_, std::defer_lock };
+      if (lock.try_lock())
+      {
+        if (queue_.empty())
+        {
+          return std::nullopt;
+        }
+        auto result = std::optional<std::function<void()>>{ std::move(queue_.front()) };
+        queue_.pop();
+        return result;
+      }
+      return std::nullopt;
+    }
+
+  private:
+    std::queue<std::function<void()>> queue_;
+    std::mutex queue_access_;
+  };
+
+}; // namespace catbus

@@ -27,13 +27,13 @@
     <ClInclude Include="event_catbus\exception.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="event_catbus\worker_mutex.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="event_catbus\worker_lock_free.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="event_catbus\event_sender.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="event_catbus\queue_mutex.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="event_catbus\queue_lock_free.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
