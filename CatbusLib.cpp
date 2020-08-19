@@ -26,13 +26,15 @@ SOFTWARE.
 //
 
 #include "dispatch_utils.h"
-#include "worker_mutex.h"
-#include "worker_lock_free.h"
+//#include "worker_mutex.h"
+//#include "worker_lock_free.h"
 #include "event_bus.h"
 #include "event_sender.h"
+#include "queue_mutex.h"
 
 #include <cassert>
 #include <iostream>
+#include <thread>
 
 using namespace catbus;
 using namespace std::chrono_literals;
@@ -116,6 +118,7 @@ public:
   void Handle(Event_BlockerNoTarget ev)
   {
     ++blocker_received;
+    std::this_thread::sleep_for(500ms);
   }
 };
 
@@ -207,6 +210,7 @@ public:
     {
       Send(Event_BlockerNoTarget{});
       Send(Event_NoTarget{});
+      Send(Event_NoTarget{});
     }
     else
     {
@@ -221,7 +225,7 @@ public:
 /// Used for events without "size_t target" field.
 bool BasicStaticDispatch()
 {
-  EventCatbus<WorkerUnitMutex> catbus{ 1 };
+  EventCatbus<QueueMutex, 1, 1> catbus;
   Consumer_NoId_Waits_NoTargetEvt A;
   Consumer_NoId_Waits_TargetEvt B;
 
@@ -243,7 +247,7 @@ bool BasicStaticDispatch()
 /// Used for events with "size_t target" field.
 bool BasicDynamicDispatch()
 {
-  EventCatbus<WorkerUnitMutex> catbus{ 1 };
+  EventCatbus<QueueMutex, 1, 1> catbus;
   Consumer_Id_Affinity_Waits_TargetEvt A{ 1, 0 };
   Consumer_Id_Affinity_Waits_TargetEvt B{ 2, 1 };
 
@@ -265,7 +269,7 @@ bool BasicDynamicDispatch()
 /// If candidate with proper id does not have handler for the event, exception should be thrown.
 bool FailedDynDispatchNoHandler()
 {
-  EventCatbus<WorkerUnitMutex> catbus{ 1 };
+  EventCatbus<QueueMutex, 1, 1> catbus;
   Consumer_Id_Affinity_Waits_TargetEvt A{ 1, 0 };
   Consumer_Id_Waits_NoTargetEvt B{ 2 };
 
@@ -297,7 +301,7 @@ bool FailedDynDispatchNoHandler()
 /// If all candidates have proper handlers, but wrong ids, exception should be thrown.
 bool FailedDynDispatchNoId()
 {
-  EventCatbus<WorkerUnitMutex> catbus{ 1 };
+  EventCatbus<QueueMutex, 1, 1> catbus;
   Consumer_Id_Affinity_Waits_TargetEvt A{ 2, 0 };
   Consumer_Id_Affinity_Waits_TargetEvt B{ 1, 1 };
 
@@ -314,10 +318,9 @@ bool FailedDynDispatchNoId()
 }
 
 /// This scheduling used for consumers without "const size_t id_" member.
-
 bool RoundRobinScheduling()
 {
-  EventCatbus<WorkerUnitLockFree> catbus{ 2 };
+  EventCatbus<QueueMutex, 2, 2> catbus;
   Consumer_NoId_Waits_NoTargetEvt A;
   Producer P;
   setup_dispatch(catbus, A, P);
@@ -325,15 +328,15 @@ bool RoundRobinScheduling()
 
   std::this_thread::sleep_for(100ms);
 
-  bool ok = A.blocker_received == 1 && A.no_target_evt_handled == 1;
+  bool ok = A.blocker_received == 1 && A.no_target_evt_handled == 2;
   return ok;
 }
 
 /// Used for consumers, who has "const size_t id_" member.
-
+// TODO: redesign this test, it does not make much sense now
 bool OrderedScheduling()
 {
-  EventCatbus<WorkerUnitLockFree> catbus{ 2 };
+  EventCatbus<QueueMutex, 2, 2> catbus;
   Consumer_Id_Affinity_Waits_TargetEvt A{ 1, 0 };
   // Consumer B is needed because Producer can send events without target, which will be statically
   // dispatched, and compilation will fail if there would be no handlers.
@@ -345,22 +348,6 @@ bool OrderedScheduling()
   std::this_thread::sleep_for(100ms);
 
   bool ok = A.blocker_received == 1 && A.target_evt_handled == 0;
-  return ok;
-}
-
-/// Send task directly to event bus, using helper function 'make_handle_task'
-/// with custom factory function.
-bool NoRoutingTask()
-{
-  EventCatbus<WorkerUnitLockFree> catbus{ 1 };
-  Consumer_FromFactory agent;
-  catbus.Send(
-    make_handle_task(
-      Event_NoTarget{},
-      [agent_ptr = &agent]() { return agent_ptr; }
-  ));
-  std::this_thread::sleep_for(100ms);
-  bool ok = agent.event_handled == 1;
   return ok;
 }
 
@@ -387,10 +374,6 @@ int main()
 
   passed = OrderedScheduling();
   std::cout << "Ordered scheduling: " << (passed ? "PASS\n" : "FAIL\n");
-
-  passed = NoRoutingTask();
-  std::cout << "Send task without routing: " << (passed ? "PASS\n" : "FAIL\n");
   
   return passed ? 0 : 1;
 }
-

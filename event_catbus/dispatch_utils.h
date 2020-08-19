@@ -67,21 +67,11 @@ struct has_id : std::false_type {};
 template<class Consumer>
 struct has_id<Consumer, void_t<std::enable_if_t<std::is_same_v<decltype(Consumer::id_), const size_t>>>> : std::true_type {};
 
-//--------------------- SFINAE consumer affinity detector
-
-/// Check if type Consumer has member 'const size_t affinity_'.
-
-template<class Consumer, class = void>
-struct has_affinity : std::false_type {};
-
-template<class Consumer>
-struct has_affinity<Consumer, void_t<std::enable_if_t<std::is_same_v<decltype(Consumer::affinity_), const size_t>>>> : std::true_type {};
-
 //--------------------- SFINAE handler caller for specific target
 
 /// This function will instantiate for classes, that have handler given event.
-template <typename Worker, typename Event, class Consumer>
-bool route_event(EventCatbus<Worker>& bus, Event& ev, Consumer& c)
+template <typename Catbus, typename Event, class Consumer>
+bool route_event(Catbus& bus, Event& ev, Consumer& c)
 {
   if constexpr (has_handler<Consumer, Event>::value && has_id<Consumer>::value)
   {
@@ -93,24 +83,16 @@ bool route_event(EventCatbus<Worker>& bus, Event& ev, Consumer& c)
       {
         consumer.Handle(std::move(event));
       };
-    if constexpr (!has_affinity<Consumer>::value)
-    {
-      bus.Send(std::move(l));
-      return true;
-    }
-    else
-    {
-      bus.Send(c.affinity_, std::move(l));
-      return true;
-    }
+    bus.Send(std::move(l));
+    return true;
   }
   return false;
 }
 
 //--------------------- Dynamic runtime dispatcher
 
-template <typename Worker, typename Event, class Consumer>
-void dynamic_dispatch(EventCatbus<Worker>& bus, Event ev, Consumer& c) noexcept(false)
+template <typename Catbus, typename Event, class Consumer>
+void dynamic_dispatch(Catbus& bus, Event ev, Consumer& c) noexcept(false)
 {
   static_assert(has_target<Event>::value, "Event does not have 'size_t target' member.");
   if (!route_event(bus, ev, c))
@@ -120,8 +102,8 @@ void dynamic_dispatch(EventCatbus<Worker>& bus, Event ev, Consumer& c) noexcept(
 }
 
 /// Recursively search parameter pack for types with handlers for given event, call handler for one, that has corresponding id.
-template <typename Worker, typename Event, class Consumer, class ...Consumers>
-void dynamic_dispatch(EventCatbus<Worker>& bus, Event ev, Consumer& c, Consumers&... others) noexcept(false)
+template <typename Catbus, typename Event, class Consumer, class ...Consumers>
+void dynamic_dispatch(Catbus& bus, Event ev, Consumer& c, Consumers&... others) noexcept(false)
 {
   static_assert(has_target<Event>::value, "Event does not have 'size_t target' member.");
   if (!route_event(bus, ev, c))
@@ -148,48 +130,23 @@ constexpr size_t find_handler_idx(size_t idx = 0)
 //--------------------- Static compile-time dispatcher
 
 /// Consumer does not have id, so event processing is scheduled to any thread
-template <typename Worker, typename Event, class Consumer>
-void static_route(EventCatbus<Worker>& bus, Event& ev, Consumer& c)
+template <typename Catbus, typename Event, class Consumer>
+void static_route(Catbus& bus, Event& ev, Consumer& c)
 {
   auto l = [&consumer = c, event{ std::move(ev) }] () mutable -> void
     {
       consumer.Handle(std::move(event));
     };
-  if constexpr (!has_affinity<Consumer>::value)
-  {
-    bus.Send(std::move(l));
-  }
-  else
-  {
-    bus.Send(c.affinity_, std::move(l));
-  }
+  bus.Send(std::move(l));
 }
 
 /// Call handler for first consumer in parameter pack, that capable of handling the event.
-template<typename Worker, typename Event, class ...Consumers>
-void static_dispatch(EventCatbus<Worker>& bus, Event ev, Consumers& ...args)
+template<typename Catbus, typename Event, class ...Consumers>
+void static_dispatch(Catbus& bus, Event ev, Consumers& ...args)
 {
   static_assert(std::tuple_size<std::tuple<Consumers...>>::value > find_handler_idx<Event, Consumers...>(), "Handler not found!");
   std::tuple<Consumers&...> list{ args... };
   static_route(bus, ev, std::get<find_handler_idx<Event, Consumers...>()>(list));
-}
-
-/// Helper function to create task which passes event to handler, produced by factory function
-template<typename Event, typename FactoryFunc>
-auto make_handle_task(Event ev, FactoryFunc f)
-{
-  return
-    [
-      evt{ std::move(ev) },
-      factory_func = f
-    ]() mutable -> void
-    {
-      auto target_consumer = factory_func();
-      if (target_consumer)
-      {
-        target_consumer->Handle(std::move(evt));
-      }
-    };
 }
 
 }; // namespace catbus

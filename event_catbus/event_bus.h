@@ -25,45 +25,32 @@ SOFTWARE.
 #pragma once
 
 #include <functional>
+#include <system_error>
 #include <thread>
+
+#include <iostream>
 
 namespace catbus {
 
-/// Contains one or more WorkerUnits and schedules tasks between them.
+/// Contains one or more worker threads and queues and schedules tasks between them.
 
-/// Main scheduling principle - tasks for consumer with id will be scheduled to
-/// the same worker based on id to prevent reordering.
-// TODO: add thread monitoring option, so that thread occupied for too long would
-// be replaced with another one, and have it's queue transferred to the new thread.
-template<typename Worker>
+template<typename Queue, size_t NQ = 1, size_t NW = 1>
 class EventCatbus
 {
 public:
-  explicit EventCatbus( size_t pool_size = 0 )
+  EventCatbus()
   {
-    size_t worker_count = pool_size ? pool_size : std::thread::hardware_concurrency();
-    workers_ = new Worker[worker_count];
-    pool_size_ = worker_count;
-  }
-
-  ~EventCatbus()
-  {
-    if ( workers_ )
+    for(size_t i = 0; i < workers_.size(); ++i)
     {
-      delete[] workers_;
+      workers_[i].Setup(&queues_, i);
     }
   }
 
   /// Schedules work by simple round-robin algorithm.
   void Send(std::function<void()> task)
   {
-    workers_[++dispatch_counter_ % pool_size_].PushTask( std::move( task ) );
-  }
-
-  /// Schedules work basing on provided id, tasks for same id will always execute on the same thread.
-  void Send( size_t agent_id, std::function<void()> task )
-  {
-    workers_[agent_id % pool_size_].PushTask( std::move(task) );
+    std::cout << "Sent to " << ((dispatch_counter_ + 1) % queues_.size()) << "\n";
+    queues_[++dispatch_counter_ % queues_.size()].Enqueue( std::move( task ) );
   }
 
   EventCatbus(const EventCatbus& other) = delete;
@@ -72,9 +59,57 @@ public:
   EventCatbus& operator=(EventCatbus&& other) = delete;
 
 private:
-  size_t pool_size_{};
+  struct Worker
+  {
+    void Setup(std::array<Queue, NQ>* queues, size_t primary)
+    {
+      queues_ = queues;
+      primary_ = primary;
+      thread_ = std::thread(
+        [&queues = queues_,
+        primary = primary_,
+        &stop = stop_] ()
+        {
+          while (!stop)
+          {
+            for(size_t i = primary; i < primary + NQ; ++i)
+            {
+              auto task = (*queues)[i % NQ].TryDequeue();
+              if (task)
+              {
+                (*task)();
+                break;
+              }
+            }
+          }
+        }
+      );
+    }
+
+    ~Worker()
+    {
+      stop_ = true;
+      if (thread_.joinable())
+      {
+        try
+        {
+          thread_.join();
+        }
+        catch (std::system_error e)
+        {
+        }
+      }
+    }
+
+    std::thread thread_;
+    std::array<Queue, NQ>* queues_;
+    size_t primary_;
+    bool stop_{};
+  };
+
   size_t dispatch_counter_{};
-  Worker* workers_;
+  std::array<Worker, NW> workers_;
+  std::array<Queue, NQ> queues_;
 };
 
 }; // namespace catbus
