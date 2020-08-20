@@ -29,7 +29,7 @@ namespace catbus {
 
     std::optional<std::function<void()>> TryDequeue()
     {
-      if (consumed_ == produced_)
+      if (consumed_ >= produced_)
       {
         return std::nullopt;
       }

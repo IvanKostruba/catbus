@@ -208,18 +208,17 @@ public:
     else
     {
       Send(Event_BlockerWithTarget{ ev.data });
-      std::this_thread::sleep_for(10ms); // See comment for OrderedScheduling().
+      std::this_thread::sleep_for(20ms); // See comment for NestedBusScheduling().
       Send(Event_WithTarget{ ev.data });
     }
   }
 };
 
-// This consumer forwards the events to another bus, that dispatches them into another bus.
-// In this case this second bus has only one thread, so it processes events in the order it
-// received them, though of course it can be different from order in which they were produced,
-// because events potentially travel through several different queues and served by different
-// threads. But if events are produced with big enough time gap, it's enough to guarantee
-// correct sequence.
+// This consumer forwards the events to another bus, that dispatches them to another consumer.
+// This second bus has only one thread, so it processes events in the same order it received them
+// though of course it can be different from order in which they were produced, because events
+// potentially travel through several different queues and served by different threads. But if
+// events are produced with big enough time gap, it's enough to guarantee correct sequence.
 class OrderedEventsProcessor : public EventSender<>
 {
 public:
@@ -363,11 +362,12 @@ bool SchedulingAndTaskStealing()
   return ok;
 }
 
-// Ordered processing is built by dispatching events to a separate bus with single thread.
+// Event consumers can have another bus inside them. This one intended to process events in FIFO
+// order and is built by dispatching events to a separate bus with single thread.
 // If that thread is blocked, all other events that were sent there will have to wait.
 // This implemetation has its limits, it can change the order of events if they were issued in
 // quick succession.
-bool OrderedScheduling()
+bool NestedBusScheduling()
 {
   EventCatbus<SimpleLockFreeQueue<16>, 2, 2> catbus;
   OrderedEventsProcessor O{ 1 };
@@ -405,8 +405,8 @@ int main()
   passed = SchedulingAndTaskStealing();
   std::cout << "Scheduling and task stealing: " << (passed ? "PASS\n" : "FAIL\n");
 
-  passed = OrderedScheduling();
-  std::cout << "Ordered scheduling: " << (passed ? "PASS\n" : "FAIL\n");
+  passed = NestedBusScheduling();
+  std::cout << "Nested bus scheduling: " << (passed ? "PASS\n" : "FAIL\n");
   
   return passed ? 0 : 1;
 }

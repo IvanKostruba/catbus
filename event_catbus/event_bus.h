@@ -36,16 +36,23 @@ namespace catbus {
 template<typename Queue, size_t NQ, size_t NWrk>
 class EventCatbus
 {
+  static_assert(NQ >= 1, "At least one queue is needed to run dispatching.");
+  static_assert(NWrk >= 1, "At least one worker thread is needed to handle events.");
 public:
   EventCatbus()
   {
-    for(size_t i = 0; i < workers_.size(); ++i)
+    for(size_t i = 0; i < NWrk; ++i)
     {
       workers_[i].Setup(&queues_, i);
     }
   }
 
   ~EventCatbus()
+  {
+    Stop();
+  }
+
+  void Stop()
   {
     for (auto& worker : workers_)
     {
@@ -58,8 +65,13 @@ public:
   {
     // std::move is used throughout the library and here as well to avoid copying of events,
     // this is why it's hard to implement try_enqueue() so we are risking some waiting here.
-    queues_[++dispatch_counter_ % queues_.size()].Enqueue( std::move( task ) );
+    queues_[++dispatch_counter_ % NQ].Enqueue( std::move( task ) );
   }
+
+  // TODO: (ideas) potentially there can be special 'high piority' queue with separate workers.
+  // Also Send() method with explicit queue idx might be useful. For example, when there are more
+  // queues than workers, additional queues will be visited when workers will have free time, so
+  // it can be sort of priority mechanism as well.
 
   EventCatbus(const EventCatbus& other) = delete;
   EventCatbus(EventCatbus&& other) = delete;
