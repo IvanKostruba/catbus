@@ -33,9 +33,15 @@ namespace catbus {
       return std::nullopt;
     }
 
+  size_t Size() const
+  {
+    auto lock = std::unique_lock<std::mutex>{ queue_access_ };
+    return queue_.size();
+  }
+
   private:
     std::queue<std::function<void()>> queue_;
-    std::mutex queue_access_;
+    mutable std::mutex queue_access_;
   };
 
 }; // namespace catbus

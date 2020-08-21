@@ -58,6 +58,10 @@ public:
     {
       worker.stop_ = true;
     }
+    for (auto& queue: queues_)
+    {
+      queue.Enqueue([](){}); // Workaround for lock-free queue problem of infinite waiting.
+    }
   }
 
   // Enqueues tasks with simple round-robin algorithm.
@@ -66,6 +70,16 @@ public:
     // std::move is used throughout the library and here as well to avoid copying of events,
     // this is why it's hard to implement try_enqueue() so we are risking some waiting here.
     queues_[++dispatch_counter_ % NQ].Enqueue( std::move( task ) );
+  }
+
+  std::array<size_t, NQ> QueueSizes() const
+  {
+    std::array<size_t, NQ> result;
+    for(size_t i = 0; i < NQ; ++i)
+    {
+      result[i] = queues_[i].Size();
+    }
+    return result;
   }
 
   // TODO: (ideas) potentially there can be special 'high piority' queue with separate workers.

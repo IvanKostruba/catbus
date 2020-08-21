@@ -34,7 +34,7 @@ struct Medium_NoTarget {
     long data0;
 };
 
-struct LongWait_NoTarger {
+struct LongWait_NoTarget {
     time_type created_ts;
     interval_type to_sleep{500000};
 };
@@ -57,7 +57,7 @@ public:
             max_time_ = waiting_time.count();
         }
         counter_.fetch_add(1, std::memory_order_relaxed);
-        if((counter_ & 256) != 0) {
+        if((counter_ & 255) != 0) {
             Send(Small_NoTarget{now, 42});
         }
         else {
@@ -66,7 +66,7 @@ public:
     }
 };
 
-class MediumEvtConsumer : public catbus::EventSender<Small_NoTarget> {
+class MediumEvtConsumer : public catbus::EventSender<Small_NoTarget, LongWait_NoTarget> {
 public:
     std::atomic_long max_time_{0};
     std::atomic_long counter_{0};
@@ -81,35 +81,66 @@ public:
             max_time_ = waiting_time.count();
         }
         counter_.fetch_add(1, std::memory_order_relaxed);
-        Send(Small_NoTarget{now, 42});
-        //Send(Small_NoTarget{now, 42});
-        //Send(Small_NoTarget{now, 42});
+        if((counter_ & 255) != 0) {
+            Send(Small_NoTarget{now, 42});
+        }
+        else {
+            Send(LongWait_NoTarget{now});
+        }
     }
 };
 
-catbus::EventCatbus<catbus::SimpleLockFreeQueue<>, 12, 12> bus;
-//catbus::EventCatbus<catbus::MutexProtectedQueue, 12, 12> bus;
+class LongEvtConsumer : public catbus::EventSender<> {
+public:
+    std::atomic_long max_time_{0};
+    std::atomic_long counter_{0};
+
+    void Handle(LongWait_NoTarget evt)
+    {
+        time_type now = std::chrono::high_resolution_clock::now();
+        auto waiting_time = interval_type{
+            std::chrono::duration_cast<std::chrono::duration<size_t, std::micro>>(now - evt.created_ts)};
+        if (waiting_time.count() > max_time_)
+        {
+            max_time_ = waiting_time.count();
+        }
+        counter_.fetch_add(1, std::memory_order_relaxed);
+        std::this_thread::sleep_for(evt.to_sleep);
+    }
+};
+
+catbus::EventCatbus<catbus::SimpleLockFreeQueue<8192>, 12, 48> bus;
+//catbus::EventCatbus<catbus::MutexProtectedQueue, 12, 48> bus;
 
 int main(int argc, char** argv) {
     SmallEvtConsumer A;
     MediumEvtConsumer B;
-    catbus::setup_dispatch(bus, A, B);
-    for(size_t i = 0; i < 100; ++i) {
-        catbus::static_dispatch(bus, Small_NoTarget{std::chrono::high_resolution_clock::now(), 42}, A, B);
+    LongEvtConsumer C;
+    catbus::setup_dispatch(bus, A, B, C);
+    for(size_t i = 0; i < 1000; ++i) {
+        catbus::static_dispatch(bus, Small_NoTarget{std::chrono::high_resolution_clock::now(), 42}, A, B, C);
     }
     auto begin = std::chrono::high_resolution_clock::now();
-    while(A.counter_ + B.counter_ < 10000000) {
+    while(A.counter_ + B.counter_ + C.counter_ < 10000000) {
         std::this_thread::sleep_for(interval_type{200000});
-        std::cout << "## Count A: " << A.counter_ << "; count B: " << B.counter_ << "\n";
+        std::cout << "## Count A: " << A.counter_ << "; count B: " << B.counter_ << "; count C: " << C.counter_ << "\n";
+        auto sizes = bus.QueueSizes();
+        std::cout << "## [";
+        for(auto size: sizes) {
+            std::cout << size << ",";
+        }
+        std::cout << "]\n\n";
     }
     bus.Stop();
     auto end = std::chrono::high_resolution_clock::now();
     auto count = A.counter_.load(std::memory_order_relaxed);
     auto countB = B.counter_.load(std::memory_order_relaxed);
+    auto countC = C.counter_.load(std::memory_order_relaxed);
     auto elapsed_seconds =
       std::chrono::duration_cast<std::chrono::duration<double>>(end - begin);
     std::cout << "## Time to process 10 000 000 events: " << elapsed_seconds.count() << "s\n";
-    std::cout << "## Avg. request/second: " << (double)(count + countB)/elapsed_seconds.count() << "\n";
+    std::cout << "## Avg. request/second: " << (double)(count + countB + countC)/elapsed_seconds.count() << "\n";
     std::cout << "## Max waiting time A: " << A.max_time_ << "mcs\n";
     std::cout << "## Max waiting time B: " << B.max_time_ << "mcs\n";
+    std::cout << "## Max waiting time C: " << C.max_time_ << "mcs\n";
 }
