@@ -47,14 +47,4 @@ namespace catbus {
     const char* description = "No consumers with corresponding id were found.";
   };
 
-  // Lock-free queue ring buffer is full
-  class queue_overflow : public std::exception
-  {
-  public:
-    const char* what() const noexcept override
-    {
-      return "Queue overflow.";
-    }
-  };
-
 }; // catbus

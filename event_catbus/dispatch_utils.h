@@ -115,6 +115,9 @@ void dynamic_dispatch(Catbus& bus, Event ev, Consumer& c, Consumers&... others) 
 
 //--------------------- Static dispatch helper
 
+// This function is needed to break recursion in compile-time, but it will be selected only
+// when no handlers are found in parameter pack, so compilation will break. There is static assert
+// using this return value to generate conscious error message.
 template<typename Event>
 constexpr size_t find_handler_idx(size_t idx)
 {

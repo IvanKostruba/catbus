@@ -25,6 +25,7 @@ SOFTWARE.
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <functional>
 #include <system_error>
 #include <thread>
@@ -32,6 +33,7 @@ SOFTWARE.
 namespace catbus {
 
 // Incapsulates worker threads and queues and enqueues tasks.
+// The Queue type must be thread-safe.
 
 template<typename Queue, size_t NQ, size_t NWrk>
 class EventCatbus
@@ -58,10 +60,6 @@ public:
     {
       worker.stop_ = true;
     }
-    for (auto& queue: queues_)
-    {
-      queue.Enqueue([](){}); // Workaround for lock-free queue problem of infinite waiting.
-    }
   }
 
   // Enqueues tasks with simple round-robin algorithm.
@@ -69,7 +67,7 @@ public:
   {
     // std::move is used throughout the library and here as well to avoid copying of events,
     // this is why it's hard to implement try_enqueue() so we are risking some waiting here.
-    queues_[++dispatch_counter_ % NQ].Enqueue( std::move( task ) );
+    queues_[dispatch_counter_.fetch_add(1, std::memory_order_relaxed) % NQ].Enqueue( std::move( task ) );
   }
 
   std::array<size_t, NQ> QueueSizes() const
@@ -97,18 +95,16 @@ private:
   {
     void Setup(std::array<Queue, NQ>* queues, size_t primary)
     {
-      queues_ = queues;
-      primary_ = primary;
       thread_ = std::thread(
-        [&queues = queues_,
-        primary = primary_,
+        [&queues = *queues,
+        primary = primary,
         &stop = stop_] ()
         {
           while (!stop)
           {
             for(size_t i = primary; !stop && i < primary + NQ; ++i)
             {
-              auto task = (*queues)[i % NQ].TryDequeue();
+              auto task = queues[i % NQ].TryDequeue();
               if (task)
               {
                 (*task)();
@@ -135,12 +131,10 @@ private:
     }
 
     std::thread thread_;
-    std::array<Queue, NQ>* queues_;
-    size_t primary_;
     bool stop_{};
   };
 
-  size_t dispatch_counter_{};
+  std::atomic_uint dispatch_counter_{};
   std::array<Worker, NWrk> workers_;
   std::array<Queue, NQ> queues_;
 };
