@@ -22,16 +22,7 @@ struct Small_NoTarget {
 
 struct Medium_NoTarget {
     time_type created_ts;
-    long data1;
-    long data2;
-    long data3;
-    long data4;
-    long data5;
-    long data6;
-    long data7;
-    long data8;
-    long data9;
-    long data0;
+    std::vector<long> vec;
 };
 
 struct LongWait_NoTarget {
@@ -82,7 +73,7 @@ public:
             Send(Small_NoTarget{now, 42});
         }
         else {
-            Send(Medium_NoTarget{now, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0});
+            Send(Medium_NoTarget{now, std::vector<long>{1, 2, 3, 4, 5, 6}});
         }
     }
 };
@@ -190,8 +181,8 @@ int main(int argc, char** argv) {
         catbus::static_dispatch(bus, Small_NoTarget{std::chrono::high_resolution_clock::now(), 42}, A, B, C);
     }
     auto begin = std::chrono::high_resolution_clock::now();
-    while(A.counter_ + B.counter_ + C.counter_ < 50000000) {
-        std::this_thread::sleep_for(interval_type{200000});
+    while(A.counter_ + B.counter_ + C.counter_ < 50'000'000) {
+        std::this_thread::sleep_for(interval_type{200'000});
         std::cout << "## Count A: " << A.counter_ << "; count B: " << B.counter_ << "; count C: " << C.counter_ << "\n";
         auto sizes = bus.QueueSizes();
         std::cout << "## [";
@@ -207,7 +198,7 @@ int main(int argc, char** argv) {
     auto countC = C.counter_.load(std::memory_order_relaxed);
     auto elapsed_seconds =
       std::chrono::duration_cast<std::chrono::duration<double>>(end - begin);
-    std::cout << "## Time to process 10 000 000 events: " << elapsed_seconds.count() << "s\n";
+    std::cout << "## Time to process 50 000 000 events: " << elapsed_seconds.count() << "s\n";
     std::cout << "## Avg. request/second: " << (double)(count + countB + countC)/elapsed_seconds.count() << "\n";
     std::cout << "## Max waiting time A: " << A.max_time_ << "mcs\n";
     std::cout << "## Max waiting time B: " << B.max_time_ << "mcs\n";

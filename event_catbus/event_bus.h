@@ -24,6 +24,8 @@ SOFTWARE.
 
 #pragma once
 
+#include "task_wrapper.h"
+
 #include <array>
 #include <atomic>
 #include <functional>
@@ -41,40 +43,32 @@ class EventCatbus
   static_assert(NQ >= 1, "At least one queue is needed to run dispatching.");
   static_assert(NWrk >= 1, "At least one worker thread is needed to handle events.");
 public:
-  EventCatbus()
-  {
-    for(size_t i = 0; i < NWrk; ++i)
-    {
+  EventCatbus() {
+    for(size_t i = 0; i < NWrk; ++i) {
       workers_[i].Setup(&queues_, i);
     }
   }
 
-  ~EventCatbus()
-  {
+  ~EventCatbus() {
     Stop();
   }
 
-  void Stop()
-  {
-    for (auto& worker : workers_)
-    {
+  void Stop() {
+    for (auto& worker : workers_) {
       worker.stop_ = true;
     }
   }
 
   // Enqueues tasks with simple round-robin algorithm.
-  void Send(std::function<void()> task)
-  {
+  void Send(TaskWrapper task) {
     // std::move is used throughout the library and here as well to avoid copying of events,
     // this is why it's hard to implement try_enqueue() so we are risking some waiting here.
     queues_[dispatch_counter_.fetch_add(1, std::memory_order_relaxed) % NQ].Enqueue( std::move( task ) );
   }
 
-  std::array<size_t, NQ> QueueSizes() const
-  {
+  std::array<size_t, NQ> QueueSizes() const {
     std::array<size_t, NQ> result;
-    for(size_t i = 0; i < NQ; ++i)
-    {
+    for(size_t i = 0; i < NQ; ++i) {
       result[i] = queues_[i].Size();
     }
     return result;
@@ -91,23 +85,18 @@ public:
   EventCatbus& operator=(EventCatbus&& other) = delete;
 
 private:
-  struct Worker
-  {
-    void Setup(std::array<Queue, NQ>* queues, size_t primary)
-    {
+  struct Worker {
+
+    void Setup(std::array<Queue, NQ>* queues, size_t primary) {
       thread_ = std::thread(
         [&queues = *queues,
         primary = primary,
-        &stop = stop_] ()
-        {
-          while (!stop)
-          {
-            for(size_t i = primary; !stop && i < primary + NQ; ++i)
-            {
+        &stop = stop_] () {
+          while (!stop) {
+            for(size_t i = primary; !stop && i < primary + NQ; ++i) {
               auto task = queues[i % NQ].TryDequeue();
-              if (task)
-              {
-                (*task)();
+              if (task.is_valid()) {
+                task.run();
                 break;
               }
             }
@@ -116,16 +105,12 @@ private:
       );
     }
 
-    ~Worker()
-    {
-      if (thread_.joinable())
-      {
-        try
-        {
+    ~Worker() {
+      if (thread_.joinable()) {
+        try {
           thread_.join();
         }
-        catch (std::system_error e)
-        {
+        catch (std::system_error e) {
         }
       }
     }

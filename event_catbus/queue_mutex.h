@@ -1,8 +1,8 @@
 #pragma once
 
-#include <functional>
+#include "task_wrapper.h"
+
 #include <mutex>
-#include <optional>
 #include <queue>
 
 namespace catbus {
@@ -11,26 +11,26 @@ namespace catbus {
   {
   public:
 
-    void Enqueue(std::function<void()> task)
+    void Enqueue(TaskWrapper task)
     {
       auto lock = std::unique_lock<std::mutex>{ queue_access_ };
       queue_.push(std::move(task));
     }
 
-    std::optional<std::function<void()>> TryDequeue()
+    TaskWrapper TryDequeue()
     {
       auto lock = std::unique_lock<std::mutex>{ queue_access_, std::defer_lock };
       if (lock.try_lock())
       {
         if (queue_.empty())
         {
-          return std::nullopt;
+          return TaskWrapper{};
         }
-        auto result = std::optional<std::function<void()>>{ std::move(queue_.front()) };
+        auto result = std::move(queue_.front());
         queue_.pop();
         return result;
       }
-      return std::nullopt;
+      return TaskWrapper{};
     }
 
   size_t Size() const
@@ -40,7 +40,7 @@ namespace catbus {
   }
 
   private:
-    std::queue<std::function<void()>> queue_;
+    std::queue<TaskWrapper> queue_;
     mutable std::mutex queue_access_;
   };
 

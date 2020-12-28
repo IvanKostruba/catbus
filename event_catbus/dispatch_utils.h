@@ -26,6 +26,7 @@ SOFTWARE.
 
 #include "event_bus.h"
 #include "exception.h"
+#include "task_wrapper.h"
 
 #include <tuple>
 #include <type_traits>
@@ -72,19 +73,12 @@ struct has_id<Consumer, void_t<std::enable_if_t<std::is_same_v<decltype(Consumer
 
 // This function will instantiate for classes, that have handler given event.
 template <typename Catbus, typename Event, class Consumer>
-bool route_event(Catbus& bus, Event& ev, Consumer& c)
-{
-  if constexpr (has_handler<Consumer, Event>::value && has_id<Consumer>::value)
-  {
-    if (c.id_ != ev.target)
-    {
+bool route_event(Catbus& bus, Event& ev, Consumer& c) {
+  if constexpr (has_handler<Consumer, Event>::value && has_id<Consumer>::value) {
+    if (c.id_ != ev.target) {
       return false;
     }
-    auto l = [&consumer = c, event{ std::move(ev) }] () mutable -> void
-      {
-        consumer.Handle(std::move(event));
-      };
-    bus.Send(std::move(l));
+    bus.Send(TaskWrapper{&c, std::move(ev)});
     return true;
   }
   return false;
@@ -93,22 +87,18 @@ bool route_event(Catbus& bus, Event& ev, Consumer& c)
 //--------------------- Dynamic runtime dispatcher
 
 template <typename Catbus, typename Event, class Consumer>
-void dynamic_dispatch(Catbus& bus, Event ev, Consumer& c) noexcept(false)
-{
+void dynamic_dispatch(Catbus& bus, Event ev, Consumer& c) noexcept(false) {
   static_assert(has_target<Event>::value, "Event does not have 'size_t target' member.");
-  if (!route_event(bus, ev, c))
-  {
+  if (!route_event(bus, ev, c)) {
     throw dispatch_error{ev.target};
   }
 }
 
 // Recursively search parameter pack for types with handlers for given event, call handler for one, that has corresponding id.
 template <typename Catbus, typename Event, class Consumer, class ...Consumers>
-void dynamic_dispatch(Catbus& bus, Event ev, Consumer& c, Consumers&... others) noexcept(false)
-{
+void dynamic_dispatch(Catbus& bus, Event ev, Consumer& c, Consumers&... others) noexcept(false) {
   static_assert(has_target<Event>::value, "Event does not have 'size_t target' member.");
-  if (!route_event(bus, ev, c))
-  {
+  if (!route_event(bus, ev, c)) {
     dynamic_dispatch(bus, std::move(ev), others...);
   }
 }
@@ -119,15 +109,13 @@ void dynamic_dispatch(Catbus& bus, Event ev, Consumer& c, Consumers&... others) 
 // when no handlers are found in parameter pack, so compilation will break. There is static assert
 // using this return value to generate conscious error message.
 template<typename Event>
-constexpr size_t find_handler_idx(size_t idx)
-{
+constexpr size_t find_handler_idx(size_t idx) {
   return idx;
 }
 
 // Recursively search for type with handler for given event.
 template<typename Event, typename Head, typename ...Ts>
-constexpr size_t find_handler_idx(size_t idx = 0)
-{
+constexpr size_t find_handler_idx(size_t idx = 0) {
   return has_handler< Head, Event >::value ? idx : find_handler_idx<Event, Ts...>(idx + 1);
 }
 
@@ -135,19 +123,13 @@ constexpr size_t find_handler_idx(size_t idx = 0)
 
 // Consumer does not have id, so event processing is scheduled to any thread
 template <typename Catbus, typename Event, class Consumer>
-void static_route(Catbus& bus, Event& ev, Consumer& c)
-{
-  auto l = [&consumer = c, event{ std::move(ev) }] () mutable -> void
-    {
-      consumer.Handle(std::move(event));
-    };
-  bus.Send(std::move(l));
+void static_route(Catbus& bus, Event& ev, Consumer& c) {
+  bus.Send(TaskWrapper{&c, std::move(ev)});
 }
 
 // Call handler for first consumer in parameter pack, that capable of handling the event.
 template<typename Catbus, typename Event, class ...Consumers>
-void static_dispatch(Catbus& bus, Event ev, Consumers& ...args)
-{
+void static_dispatch(Catbus& bus, Event ev, Consumers& ...args) {
   static_assert(std::tuple_size<std::tuple<Consumers...>>::value > find_handler_idx<Event, Consumers...>(), "Handler not found!");
   std::tuple<Consumers&...> list{ args... };
   static_route(bus, ev, std::get<find_handler_idx<Event, Consumers...>()>(list));

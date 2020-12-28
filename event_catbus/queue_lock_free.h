@@ -1,8 +1,8 @@
 #pragma once
 
+#include "task_wrapper.h"
+
 #include <atomic>
-#include <functional>
-#include <optional>
 
 namespace catbus {
 
@@ -30,33 +30,33 @@ namespace catbus {
       // other hand it's only relevant to this type of queue.
       while(Size() <= 1)
       {
-        Enqueue([]{});
+        Enqueue(TaskWrapper{});
       }
     }
 
-    void Enqueue(std::function<void()> task)
+    void Enqueue(TaskWrapper task)
     {
       unsigned prod = produced_.fetch_add(1, std::memory_order_relaxed) & mask_;
       while (buffer_[prod].ready.load(std::memory_order_acquire))
       {
         std::this_thread::yield();
       }
-      buffer_[prod].run = std::move(task);
+      buffer_[prod].t = std::move(task);
       buffer_[prod].ready.store(true, std::memory_order_release);
     }
 
-    std::optional<std::function<void()>> TryDequeue()
+    TaskWrapper TryDequeue()
     {
       if (consumed_.load(std::memory_order_relaxed) >= produced_.load(std::memory_order_relaxed))
       {
-        return std::nullopt;
+        return TaskWrapper{};
       }
       unsigned current = consumed_.fetch_add(1, std::memory_order_relaxed) & mask_;
       while (!buffer_[current].ready.load(std::memory_order_acquire))
       {
         std::this_thread::yield();
       }
-      auto result = std::optional<std::function<void()>>{ std::move(buffer_[current].run) };
+      auto result = std::move(buffer_[current].t);
       buffer_[current].ready.store(false, std::memory_order_release);
       return result;
     }
@@ -76,7 +76,7 @@ namespace catbus {
     struct Task
     {
       std::atomic_bool ready{ false };
-      std::function<void()> run;
+      TaskWrapper t;
     };
     Task buffer_[N];
     static const size_t mask_{ N - 1 };

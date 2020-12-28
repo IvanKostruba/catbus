@@ -208,7 +208,7 @@ public:
     else
     {
       Send(Event_BlockerWithTarget{ ev.data });
-      std::this_thread::sleep_for(20ms); // See comment for NestedBusScheduling().
+      std::this_thread::sleep_for(50ms); // See comment for NestedBusScheduling().
       Send(Event_WithTarget{ ev.data });
     }
   }
@@ -369,7 +369,7 @@ bool SchedulingAndTaskStealing()
 // quick succession.
 bool NestedBusScheduling()
 {
-  EventCatbus<SimpleLockFreeQueue<16>, 2, 2> catbus;
+  EventCatbus<MutexProtectedQueue, 2, 2> catbus;
   OrderedEventsProcessor O{ 1 };
   // Consumer B is needed because Producer can send events without target, which will be statically
   // dispatched, and compilation will fail if there would be no handlers.
@@ -379,7 +379,7 @@ bool NestedBusScheduling()
   static_dispatch(catbus, Event_InitProducer{ 1 }, P);
 
   std::this_thread::sleep_for(100ms);
-
+  
   bool ok = O.final_consumer_.blocker_received == 1 && O.final_consumer_.target_evt_handled == 0;
   return ok;
 }
