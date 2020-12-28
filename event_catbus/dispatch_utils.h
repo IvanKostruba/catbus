@@ -47,7 +47,9 @@ template<class T, class Event, class = void>
 struct has_handler : std::false_type {};
 
 template<class T, class Event>
-struct has_handler<T, Event, void_t<decltype(std::declval<T>().Handle(std::declval<Event>()))>> : std::true_type {};
+struct has_handler<T, Event, void_t<
+  decltype(std::declval<T>().Handle(std::declval<Event>()))>
+> : std::true_type {};
 
 //--------------------- SFINAE event target id detector
 
@@ -57,7 +59,9 @@ template<class Event, class = void>
 struct has_target : std::false_type {};
 
 template<class Event>
-struct has_target<Event, void_t<std::enable_if_t<std::is_same_v<decltype(Event::target), size_t>>>> : std::true_type {};
+struct has_target<Event, void_t<std::enable_if_t<
+  std::is_same_v<decltype(Event::target), size_t>>>
+> : std::true_type {};
 
 //--------------------- SFINAE consumer id detector
 
@@ -96,7 +100,8 @@ void dynamic_dispatch(Catbus& bus, Event ev, Consumer& c) noexcept(false) {
   }
 }
 
-// Recursively search parameter pack for types with handlers for given event, call handler for one, that has corresponding id.
+// Recursively search parameter pack for types with handlers for given event, that have
+// corresponding id. Call handler for the first match.
 template <typename Catbus, typename Event, class Consumer, class ...Consumers>
 void dynamic_dispatch(Catbus& bus, Event ev, Consumer& c, Consumers&... others) noexcept(false) {
   static_assert(has_target<Event>::value, "Event does not have 'size_t target' member.");
