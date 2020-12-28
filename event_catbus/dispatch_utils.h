@@ -67,7 +67,9 @@ template<class Consumer, class = void>
 struct has_id : std::false_type {};
 
 template<class Consumer>
-struct has_id<Consumer, void_t<std::enable_if_t<std::is_same_v<decltype(Consumer::id_), const size_t>>>> : std::true_type {};
+struct has_id<Consumer, void_t<std::enable_if_t<
+  std::is_same_v<decltype(Consumer::id_), const size_t>>>
+> : std::true_type {};
 
 //--------------------- SFINAE handler caller for specific target
 
@@ -121,18 +123,13 @@ constexpr size_t find_handler_idx(size_t idx = 0) {
 
 //--------------------- Static compile-time dispatcher
 
-// Consumer does not have id, so event processing is scheduled to any thread
-template <typename Catbus, typename Event, class Consumer>
-void static_route(Catbus& bus, Event& ev, Consumer& c) {
-  bus.Send(TaskWrapper{&c, std::move(ev)});
-}
-
 // Call handler for first consumer in parameter pack, that capable of handling the event.
 template<typename Catbus, typename Event, class ...Consumers>
 void static_dispatch(Catbus& bus, Event ev, Consumers& ...args) {
-  static_assert(std::tuple_size<std::tuple<Consumers...>>::value > find_handler_idx<Event, Consumers...>(), "Handler not found!");
+  constexpr auto consumer_idx = find_handler_idx<Event, Consumers...>();
+  static_assert(std::tuple_size<std::tuple<Consumers...>>::value > consumer_idx, "Handler not found!");
   std::tuple<Consumers&...> list{ args... };
-  static_route(bus, ev, std::get<find_handler_idx<Event, Consumers...>()>(list));
+  bus.Send(TaskWrapper{&std::get<consumer_idx>(list), std::move(ev)});
 }
 
 }; // namespace catbus

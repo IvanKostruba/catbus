@@ -39,16 +39,7 @@ struct Small_WithTarget {
 struct Medium_WithTarget {
     size_t target;
     time_type created_ts;
-    long data1;
-    long data2;
-    long data3;
-    long data4;
-    long data5;
-    long data6;
-    long data7;
-    long data8;
-    long data9;
-    long data0;
+    std::vector<long> vec;
 };
 
 // --------------------------------------------------
@@ -146,7 +137,7 @@ public:
             Send(Small_WithTarget{count % 3, now, 42});
         }
         else {
-            Send(Medium_WithTarget{count % 3, now, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0});
+            Send(Medium_WithTarget{count % 3, now, std::vector<long>{1, 2, 3, 4, 5, 6}});
         }
     }
 
