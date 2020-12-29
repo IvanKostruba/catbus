@@ -204,6 +204,7 @@ public:
   {
     if (ev.data == 0)
     {
+      // Passing the same queue idx to send() method to keep processing local.
       sender_.send(Event_BlockerNoTarget{}, q);
       sender_.send(Event_NoTarget{}, q);
       sender_.send(Event_NoTarget{}, q);
