@@ -15,7 +15,7 @@ namespace _detail {
     };
 
     template<typename Handler, typename Event>
-    constexpr vtable vtable_ctx_for {
+    constexpr vtable vtable_for {
         [](void* ptr) {
             auto* p = static_cast<std::pair<Handler, Event>*>(ptr);
             p->first->Handle(std::move(p->second));
@@ -38,12 +38,12 @@ namespace _detail {
 class TaskWrapper {
 public:
     TaskWrapper()
-        : vtable_{nullptr} {
-    }
+        : vtable_{nullptr}
+    {}
 
     template<typename Handler, typename Event>
     TaskWrapper(Handler x, Event c)
-        : vtable_{&_detail::vtable_ctx_for<Handler, Event>}
+        : vtable_{&_detail::vtable_for<Handler, Event>}
     {
         static_assert(sizeof(std::pair<Handler, Event>) <= sizeof(buf_),
             "Wrapper buffer is too small!");
@@ -77,6 +77,7 @@ public:
         vtable_ = other.vtable_;
         return *this;
     }
+
     TaskWrapper& operator=(TaskWrapper&& other) noexcept {
         if (vtable_) {
             vtable_->destroy_(&buf_);

@@ -104,7 +104,7 @@ struct Event_InitProducer
 // TEST CONSUMERS
 
 // Used to test static dispatching of events, based on event type and handler method signature.
-class Consumer_NoId_Waits_NoTargetEvt : public EventSender<>
+class Consumer_NoId_Waits_NoTargetEvt
 {
 public:
   Consumer_NoId_Waits_NoTargetEvt() = default;
@@ -144,7 +144,7 @@ public:
 };
 
 // Proper consumer for targeted events, used to test positive scenarios.
-class Consumer_Id_Waits_TargetEvt : public EventSender<>
+class Consumer_Id_Waits_TargetEvt
 {
 public:
   explicit Consumer_Id_Waits_TargetEvt(size_t id)
@@ -188,28 +188,31 @@ public:
 };
 
 // Event producer is used to test automatic setup of event sender methods.
-class Producer : public EventSender<Event_BlockerNoTarget, Event_BlockerWithTarget, Event_NoTarget, Event_WithTarget>
+class Producer
 {
 public:
   Producer() = default;
   Producer(const Producer&) = delete;
   Producer(Producer&&) = delete;
 
+  EventSender<
+    Event_BlockerNoTarget, Event_BlockerWithTarget, Event_NoTarget, Event_WithTarget
+  > sender_;
   int event_handled{ 0 };
 
   void Handle(Event_InitProducer ev)
   {
     if (ev.data == 0)
     {
-      Send(Event_BlockerNoTarget{});
-      Send(Event_NoTarget{});
-      Send(Event_NoTarget{});
+      sender_.send(Event_BlockerNoTarget{});
+      sender_.send(Event_NoTarget{});
+      sender_.send(Event_NoTarget{});
     }
     else
     {
-      Send(Event_BlockerWithTarget{ ev.data });
+      sender_.send(Event_BlockerWithTarget{ ev.data });
       std::this_thread::sleep_for(50ms); // See comment for NestedBusScheduling().
-      Send(Event_WithTarget{ ev.data });
+      sender_.send(Event_WithTarget{ ev.data });
     }
   }
 };
@@ -219,7 +222,7 @@ public:
 // though of course it can be different from order in which they were produced, because events
 // potentially travel through several different queues and served by different threads. But if
 // events are produced with big enough time gap, it's enough to guarantee correct sequence.
-class OrderedEventsProcessor : public EventSender<>
+class OrderedEventsProcessor
 {
 public:
   explicit OrderedEventsProcessor(size_t id)
@@ -376,7 +379,8 @@ bool NestedBusScheduling()
   Consumer_NoId_Waits_NoTargetEvt B;
   Producer P;
   setup_dispatch(catbus, O, B, P);
-  static_dispatch(catbus, Event_InitProducer{ 1 }, P);
+  EventSender<Event_InitProducer> sender{catbus, P};
+  sender.send(Event_InitProducer{ 1 });
 
   std::this_thread::sleep_for(100ms);
   

@@ -44,9 +44,10 @@ struct Medium_WithTarget {
 
 // --------------------------------------------------
 
-class SmallEvtConsumer : public catbus::EventSender<Medium_NoTarget, Small_NoTarget>
+class SmallEvtConsumer
 {
 public:
+    catbus::EventSender<Medium_NoTarget, Small_NoTarget> sender_;
     std::atomic_long max_time_{0};
     std::atomic_long counter_{0};
 
@@ -61,17 +62,18 @@ public:
         }
         counter_.fetch_add(1, std::memory_order_relaxed);
         if((counter_ & 255) != 0) {
-            Send(Small_NoTarget{now, 42});
+            sender_.send(Small_NoTarget{now, 42});
         }
         else {
-            Send(Medium_NoTarget{now, std::vector<long>{1, 2, 3, 4, 5, 6}});
+            sender_.send(Medium_NoTarget{now, std::vector<long>{1, 2, 3, 4, 5, 6}});
         }
     }
 };
 
-class MediumEvtConsumer : public catbus::EventSender<Small_NoTarget, LongWait_NoTarget>
+class MediumEvtConsumer
 {
 public:
+    catbus::EventSender<Small_NoTarget, LongWait_NoTarget> sender_;
     std::atomic_long max_time_{0};
     std::atomic_long counter_{0};
 
@@ -86,15 +88,15 @@ public:
         }
         counter_.fetch_add(1, std::memory_order_relaxed);
         if((counter_ & 255) != 0) {
-            Send(Small_NoTarget{now, 42});
+            sender_.send(Small_NoTarget{now, 42});
         }
         else {
-            Send(LongWait_NoTarget{now});
+            sender_.send(LongWait_NoTarget{now});
         }
     }
 };
 
-class LongEvtConsumer : public catbus::EventSender<>
+class LongEvtConsumer
 {
 public:
     std::atomic_long max_time_{0};
@@ -114,9 +116,11 @@ public:
     }
 };
 
-class TargetedEventsConsumer : public catbus::EventSender<Small_WithTarget, Medium_WithTarget> 
+class TargetedEventsConsumer 
 {
 public:
+    catbus::EventSender<Small_WithTarget, Medium_WithTarget> sender_;
+
     const size_t id_;
     std::atomic_long max_time_{0};
     std::atomic_ulong counter_{0};
@@ -134,10 +138,10 @@ public:
         }
         auto count = counter_.fetch_add(1, std::memory_order_relaxed);
         if((count & 255) != 0) {
-            Send(Small_WithTarget{count % 3, now, 42});
+            sender_.send(Small_WithTarget{count % 3, now, 42});
         }
         else {
-            Send(Medium_WithTarget{count % 3, now, std::vector<long>{1, 2, 3, 4, 5, 6}});
+            sender_.send(Medium_WithTarget{count % 3, now, std::vector<long>{1, 2, 3, 4, 5, 6}});
         }
     }
 
@@ -152,7 +156,7 @@ public:
         }
         auto count = counter_.fetch_add(1, std::memory_order_relaxed);
 
-        Send(Small_WithTarget{count % 3, now, 42});
+        sender_.send(Small_WithTarget{count % 3, now, 42});
     }
 };
 
@@ -165,11 +169,13 @@ int main(int argc, char** argv) {
     SmallEvtConsumer A;
     MediumEvtConsumer B;
     LongEvtConsumer C;
-    //TargetedEventsConsumer AT{0}, BT{1}, CT{2};
+    TargetedEventsConsumer AT{0}, BT{1}, CT{2};
 
     catbus::setup_dispatch(bus, A, B, C);
+    catbus::EventSender<Small_NoTarget> sender{bus, A, B, C};
     for(size_t i = 0; i < 1000; ++i) {
-        catbus::static_dispatch(bus, Small_NoTarget{std::chrono::high_resolution_clock::now(), 42}, A, B, C);
+        //catbus::static_dispatch(bus, Small_NoTarget{std::chrono::high_resolution_clock::now(), 42}, A, B, C);
+        sender.send(Small_NoTarget{std::chrono::high_resolution_clock::now(), 42});
     }
     auto begin = std::chrono::high_resolution_clock::now();
     while(A.counter_ + B.counter_ + C.counter_ < 50'000'000) {

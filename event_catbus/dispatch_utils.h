@@ -75,6 +75,18 @@ struct has_id<Consumer, void_t<std::enable_if_t<
   std::is_same_v<decltype(Consumer::id_), const size_t>>>
 > : std::true_type {};
 
+//--------------------- SFINAE sender detector
+
+// Check if type Consumer has member 'EventSender sender_'.
+
+template<class Consumer, class = void>
+struct has_sender : std::false_type {};
+
+template<class Consumer>
+struct has_sender<Consumer, void_t<std::enable_if_t<
+  std::is_member_object_pointer<decltype(&Consumer::sender_)>::value>>
+> : std::true_type {};
+
 //--------------------- SFINAE handler caller for specific target
 
 // This function will instantiate for classes, that have handler given event.
