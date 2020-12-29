@@ -26,7 +26,7 @@ struct Response
 };
 
 // Event handlers
-class Sender : public catbus::EventSender<Request>
+class Sender 
 {
 public:
   explicit Sender(size_t id) : id_{id}
@@ -34,24 +34,27 @@ public:
   void handle(Init event)
   { 
     std::cout << "Init received\n";
-    send( Request{id_} );
+    sender_.send( Request{id_} );
   }
   void handle(Response event)
   { 
     std::cout << "Response received: code " << event.error_code << "\n";
   }
   
+  catbus::EventSender<Request> sender_;
   const size_t id_;
 };
 
-class Receiver : public catbus::EventSender<Response>
+class Receiver
 {
 public:
   void handle(Request req)
   { 
     std::cout << "Request received: " << req.data << "\n";
-    send(Response{req.sender, 200});
+    sender_.send(Response{req.sender, 200});
   }
+
+  catbus::EventSender<Response> sender_;
 };
 
 int main(int argc, char** argv) {
@@ -60,10 +63,9 @@ int main(int argc, char** argv) {
   catbus::EventCatbus<catbus::MutexProtectedQueue, 1, 2> bus;
   Sender sender{1};
   Receiver receiver;
-  catbus::setup_dispatch(bus, sender, receiver); // Setting up send() methods.
+  catbus::setup_dispatch(bus, sender, receiver); // Setting up sender_ members.
 
   // Startup
   catbus::static_dispatch(bus, Init{}, sender); // send the initial event.
   std::this_thread::sleep_for(200ms);
 }
-
