@@ -91,7 +91,7 @@ struct has_sender<Consumer, void_t<std::enable_if_t<
 
 // This function will instantiate for classes, that have handler given event.
 template <typename Catbus, typename Event, class Consumer>
-bool route_event(Catbus& bus, Event& ev, Consumer& c) {
+inline bool route_event(Catbus& bus, Event& ev, Consumer& c) {
     if constexpr (has_handler<Consumer, Event>::value && has_id<Consumer>::value) {
         if (c.id_ != ev.target) {
             return false;
@@ -144,7 +144,8 @@ constexpr size_t find_handler_idx(size_t idx = 0) {
 template<typename Catbus, typename Event, class ...Consumers>
 void static_dispatch(Catbus& bus, Event ev, Consumers& ...args) {
     constexpr auto consumer_idx = find_handler_idx<Event, Consumers...>();
-    static_assert(std::tuple_size<std::tuple<Consumers...>>::value > consumer_idx, "Handler not found!");
+    static_assert(std::tuple_size<std::tuple<Consumers...>>::value > consumer_idx,
+        "Handler not found!");
     std::tuple<Consumers&...> list{ args... };
     bus.send(TaskWrapper{&std::get<consumer_idx>(list), std::move(ev)});
 }

@@ -35,6 +35,10 @@ namespace _detail {
     };
 };  // namespace detail
 
+// Previously tasks were enqueued as std::function bound to lambda, which captured handler ref and
+// the event. But std::function is extremely slow, so it was replaced with this wrapper. While it
+// puts a limit on event size (adjustable though), it works ~35% faster. In case of variable event
+// sizes it can be relatively easily swithced to heap-allocated storage with SBO.
 class TaskWrapper {
 public:
     TaskWrapper()

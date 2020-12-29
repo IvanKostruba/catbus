@@ -64,6 +64,10 @@ namespace catbus {
 // Use this class when you want to easily send given set of events to consumers.
 // If you compose that into a consumer class with a name '_sender' it can be automatically
 // set up by 'setup_dispatch' function.
+
+// EventSender used to be a base class with std::function member Send() inside. This member was
+// initialized with lambda, which captured bus and other consumers refs. But, because of extreme
+// inefficiency of std::function, it was changed to local storage wrapper with manual vtable.
 template <typename... E>
 struct EventSender {
     using event_type = std::conditional_t<(sizeof...(E) > 0), std::variant<E...>, _detail::EmptyEventsList>;
@@ -113,7 +117,7 @@ struct EventSender {
     std::aligned_storage_t<64> _consumers;
 };
 
-// This function will automatically init event senders with the name '_sender' inside the
+// This function will automatically init event senders with the name 'sender_' inside the
 // consumers instances passed here.
 template <typename Bus, typename... Consumer>
 void setup_dispatch(Bus& bus, Consumer&... consumers) {

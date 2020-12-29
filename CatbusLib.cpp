@@ -217,9 +217,9 @@ public:
   }
 };
 
-// This consumer forwards the events to another bus, that dispatches them to another consumer.
+// This consumer forwards the events to another bus, that dispatches them to the final consumer.
 // This second bus has only one thread, so it processes events in the same order it received them
-// though of course it can be different from order in which they were produced, because events
+// though of course it can be different from the order in which they were produced, because events
 // potentially travel through several different queues and served by different threads. But if
 // events are produced with big enough time gap, it's enough to guarantee correct sequence.
 class OrderedEventsProcessor
