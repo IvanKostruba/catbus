@@ -36,6 +36,9 @@
     <ClInclude Include="event_catbus\queue_lock_free.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="event_catbus\task_wrapper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CatbusLib.cpp">

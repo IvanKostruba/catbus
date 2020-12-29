@@ -159,6 +159,7 @@
     <ClInclude Include="event_catbus\exception.h" />
     <ClInclude Include="event_catbus\queue_lock_free.h" />
     <ClInclude Include="event_catbus\queue_mutex.h" />
+    <ClInclude Include="event_catbus\task_wrapper.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
