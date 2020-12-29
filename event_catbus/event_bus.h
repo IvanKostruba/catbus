@@ -58,11 +58,17 @@ public:
         }
     }
 
-    // Enqueues tasks with simple round-robin algorithm.
-    void send(TaskWrapper task) {
+    // Enqueues tasks to specified queue, falls back to simple round-robin algorithm if
+    // provided value is out of range.
+    void send(TaskWrapper task, size_t q) {
         // std::move is used throughout the library and here as well to avoid copying of events,
         // this is why it's hard to implement try_enqueue() so we are risking some waiting here.
-        queues_[dispatch_counter_.fetch_add(1, std::memory_order_relaxed) % NQ].enqueue( std::move( task ) );
+        if (q < NQ) {
+            queues_[q].enqueue(std::move(task));
+        } else {
+            queues_[dispatch_counter_.fetch_add(1, std::memory_order_relaxed) % NQ].
+                enqueue(std::move(task));
+        }
     }
 
     std::array<size_t, NQ> QueueSizes() const {
@@ -93,7 +99,9 @@ private:
                         for(size_t i = primary; !stop && i < primary + NQ; ++i) {
                             auto task = queues[i % NQ].try_dequeue();
                             if (task.is_valid()) {
-                                task.run();
+                                // Passing primary queue idx, because worker will check it on the
+                                // next iteration anyway. 
+                                task.run(primary);
                                 break;
                             }
                         }

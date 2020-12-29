@@ -14,7 +14,7 @@ Contains struct EventSender which you can compose into your class with the name 
 
 ## Usage overview:
 'Event' is just any type, if it is move-constructible and move-assignable, then no copies will be created in dispatch process.
-Event consumer must have `handle()` method(s), taking 'Event' type as an argument by value. Dispatcher will automatically find proper consumer based on Handle methods signatures.
+Event consumer must have `handle()` method(s), taking 'Event' type as an argument by value. Dispatcher will automatically find proper consumer based on Handle methods signatures. The second argument of `handle()` method must be size_t value. It is an index of the queue, from which the current task came. It is ugly, but sending next event to the same queue and thread, so keeping them local drastically increases performance, almost 2x in case of mutex-synchronized queue.
 
 In basic scenario just type of event and signature of `handle()` method determines, how event is dispatched, and the first object in `static_dispatch()` arguments list that has suitable handler will be selected.
 

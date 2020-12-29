@@ -12,20 +12,26 @@ namespace catbus {
     template<typename Bus, typename Event, typename ConsumersTuple, std::size_t... I>
     constexpr void route_impl(
         Bus& bus,
+        size_t q,
         Event event,
         ConsumersTuple& consumers,
         std::index_sequence<I...>
     ) noexcept(false) {
         if constexpr (has_target<Event>::value) {
-            dynamic_dispatch(bus, std::move(event), *std::get<I>(consumers)...);
+            dynamic_dispatch(bus, q, std::move(event), *std::get<I>(consumers)...);
         } else {
-            static_dispatch(bus, std::move(event), *std::get<I>(consumers)...);
+            static_dispatch(bus, q, std::move(event), *std::get<I>(consumers)...);
         }
     }
 
     template<typename Bus, typename Event, typename ConsumersTuple>
-    constexpr void route(Bus& bus, Event event, ConsumersTuple& consumers) noexcept(false) {
-        route_impl(bus, std::move(event), consumers,
+    inline constexpr void route(
+        Bus& bus,
+        size_t q,
+        Event event,
+        ConsumersTuple& consumers
+    ) noexcept(false) {
+        route_impl(bus, q, std::move(event), consumers,
             std::make_index_sequence<std::tuple_size_v<std::remove_reference_t<ConsumersTuple>>>{});
     }
 
@@ -33,18 +39,19 @@ namespace catbus {
 
     template<typename Event>
     struct sender_vtable {
-        void (*send)(void* bus, void* consumers, Event event);
+        void (*send)(void* bus, size_t q, void* consumers, Event event);
 
         void (*clone)(void* storage, const void* ptr);
     };
 
     template<typename Bus, typename ConsumersTuple, typename EventVar>
     constexpr sender_vtable<EventVar> sender_vtable_for {
-        [](void* bus, void* consumers, EventVar ev) {
+        [](void* bus, size_t q, void* consumers, EventVar ev) {
             if constexpr (!std::is_same_v<EventVar, _detail::EmptyEventsList>) {
                 std::visit(
                     [&](auto&& event) { _detail::route(
                         *static_cast<Bus*>(bus),
+                        q,
                         std::move(event),
                         *static_cast<ConsumersTuple*>(consumers));
                     },
@@ -62,7 +69,7 @@ namespace catbus {
     }; // namespace _detail
 
 // Use this class when you want to easily send given set of events to consumers.
-// If you compose that into a consumer class with a name '_sender' it can be automatically
+// If you compose that into a consumer class with a name 'sender_' it can be automatically
 // set up by 'setup_dispatch' function.
 
 // EventSender used to be a base class with std::function member Send() inside. This member was
@@ -70,7 +77,8 @@ namespace catbus {
 // inefficiency of std::function, it was changed to local storage wrapper with manual vtable.
 template <typename... E>
 struct EventSender {
-    using event_type = std::conditional_t<(sizeof...(E) > 0), std::variant<E...>, _detail::EmptyEventsList>;
+    using event_type =
+        std::conditional_t<(sizeof...(E) > 0), std::variant<E...>, _detail::EmptyEventsList>;
 
     EventSender() : _vtable{nullptr}, _bus{nullptr}
     {}
@@ -108,8 +116,8 @@ struct EventSender {
         new (&_consumers) std::tuple<Consumer*...>{&consumers...};
     }
 
-    void send(event_type ev) {
-        _vtable->send(_bus, &_consumers, std::move(ev));
+    void send(event_type ev, size_t q = ROUND_ROBIN) {
+        _vtable->send(_bus, q, &_consumers, std::move(ev));
     }
 
     const _detail::sender_vtable<event_type>* _vtable;

@@ -51,7 +51,7 @@ public:
     std::atomic_long max_time_{0};
     std::atomic_long counter_{0};
 
-    void handle(Small_NoTarget evt)
+    void handle(Small_NoTarget evt, size_t q)
     {
         time_type now = std::chrono::high_resolution_clock::now();
         auto waiting_time = interval_type{
@@ -62,10 +62,10 @@ public:
         }
         counter_.fetch_add(1, std::memory_order_relaxed);
         if((counter_ & 255) != 0) {
-            sender_.send(Small_NoTarget{now, 42});
+            sender_.send(Small_NoTarget{now, 42}, q);
         }
         else {
-            sender_.send(Medium_NoTarget{now, std::vector<long>{1, 2, 3, 4, 5, 6}});
+            sender_.send(Medium_NoTarget{now, std::vector<long>{1, 2, 3, 4, 5, 6}}, q);
         }
     }
 };
@@ -77,7 +77,7 @@ public:
     std::atomic_long max_time_{0};
     std::atomic_long counter_{0};
 
-    void handle(Medium_NoTarget evt)
+    void handle(Medium_NoTarget evt, size_t q)
     {
         time_type now = std::chrono::high_resolution_clock::now();
         auto waiting_time = interval_type{
@@ -88,10 +88,10 @@ public:
         }
         counter_.fetch_add(1, std::memory_order_relaxed);
         if((counter_ & 255) != 0) {
-            sender_.send(Small_NoTarget{now, 42});
+            sender_.send(Small_NoTarget{now, 42}, q);
         }
         else {
-            sender_.send(LongWait_NoTarget{now});
+            sender_.send(LongWait_NoTarget{now}, q);
         }
     }
 };
@@ -102,7 +102,7 @@ public:
     std::atomic_long max_time_{0};
     std::atomic_long counter_{0};
 
-    void handle(LongWait_NoTarget evt)
+    void handle(LongWait_NoTarget evt, size_t q)
     {
         time_type now = std::chrono::high_resolution_clock::now();
         auto waiting_time = interval_type{
@@ -127,7 +127,7 @@ public:
 
     explicit TargetedEventsConsumer(size_t id) : id_{id} {}
 
-    void handle(Small_WithTarget evt)
+    void handle(Small_WithTarget evt, size_t q)
     {
         time_type now = std::chrono::high_resolution_clock::now();
         auto waiting_time = interval_type{
@@ -138,14 +138,14 @@ public:
         }
         auto count = counter_.fetch_add(1, std::memory_order_relaxed);
         if((count & 255) != 0) {
-            sender_.send(Small_WithTarget{count % 3, now, 42});
+            sender_.send(Small_WithTarget{count % 3, now, 42}, q);
         }
         else {
-            sender_.send(Medium_WithTarget{count % 3, now, std::vector<long>{1, 2, 3, 4, 5, 6}});
+            sender_.send(Medium_WithTarget{count % 3, now, std::vector<long>{1, 2, 3, 4, 5, 6}}, q);
         }
     }
 
-    void handle(Medium_WithTarget evt)
+    void handle(Medium_WithTarget evt, size_t q)
     {
         time_type now = std::chrono::high_resolution_clock::now();
         auto waiting_time = interval_type{
@@ -156,7 +156,7 @@ public:
         }
         auto count = counter_.fetch_add(1, std::memory_order_relaxed);
 
-        sender_.send(Small_WithTarget{count % 3, now, 42});
+        sender_.send(Small_WithTarget{count % 3, now, 42}, q);
     }
 };
 

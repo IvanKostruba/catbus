@@ -114,12 +114,12 @@ public:
   int no_target_evt_handled{ 0 };
   int blocker_received{ 0 };
 
-  void handle(Event_NoTarget ev)
+  void handle(Event_NoTarget ev, size_t)
   {
     ++no_target_evt_handled;
   }
 
-  void handle(Event_BlockerNoTarget ev)
+  void handle(Event_BlockerNoTarget ev, size_t)
   {
     ++blocker_received;
     std::this_thread::sleep_for(500ms);
@@ -137,7 +137,7 @@ public:
   int target_evt_handled{ 0 };
 
   // Even though it has handler, events with target can only be dispatched to consumers with id_.
-  void handle(Event_WithTarget ev)
+  void handle(Event_WithTarget ev, size_t)
   {
     ++target_evt_handled;
   }
@@ -157,12 +157,12 @@ public:
   int target_evt_handled{ 0 };
   int blocker_received{ 0 };
 
-  void handle(Event_WithTarget ev)
+  void handle(Event_WithTarget ev, size_t)
   {
     ++target_evt_handled;
   }
 
-  void handle(Event_BlockerWithTarget ev)
+  void handle(Event_BlockerWithTarget ev, size_t)
   {
     ++blocker_received;
     std::this_thread::sleep_for(500ms);
@@ -181,7 +181,7 @@ public:
   const size_t id_;
   int no_target_evt_handled{ 0 };
 
-  void handle(Event_NoTarget ev)
+  void handle(Event_NoTarget ev, size_t)
   {
     ++no_target_evt_handled;
   }
@@ -200,19 +200,19 @@ public:
   > sender_;
   int event_handled{ 0 };
 
-  void handle(Event_InitProducer ev)
+  void handle(Event_InitProducer ev, size_t q)
   {
     if (ev.data == 0)
     {
-      sender_.send(Event_BlockerNoTarget{});
-      sender_.send(Event_NoTarget{});
-      sender_.send(Event_NoTarget{});
+      sender_.send(Event_BlockerNoTarget{}, q);
+      sender_.send(Event_NoTarget{}, q);
+      sender_.send(Event_NoTarget{}, q);
     }
     else
     {
-      sender_.send(Event_BlockerWithTarget{ ev.data });
+      sender_.send(Event_BlockerWithTarget{ ev.data }, q);
       std::this_thread::sleep_for(50ms); // See comment for NestedBusScheduling().
-      sender_.send(Event_WithTarget{ ev.data });
+      sender_.send(Event_WithTarget{ ev.data }, q);
     }
   }
 };
@@ -237,14 +237,14 @@ public:
   Consumer_Id_Waits_TargetEvt final_consumer_{ 1 };
   EventCatbus<MutexProtectedQueue, 1, 1> processor_;
 
-  void handle(Event_WithTarget ev)
+  void handle(Event_WithTarget ev, size_t)
   {
-    dynamic_dispatch(processor_, std::move(ev), final_consumer_);
+    dynamic_dispatch(processor_, ROUND_ROBIN, std::move(ev), final_consumer_);
   }
 
-  void handle(Event_BlockerWithTarget ev)
+  void handle(Event_BlockerWithTarget ev, size_t)
   {
-    dynamic_dispatch(processor_, std::move(ev), final_consumer_);
+    dynamic_dispatch(processor_, ROUND_ROBIN, std::move(ev), final_consumer_);
   }
 };
 
@@ -268,7 +268,7 @@ bool BasicStaticDispatch()
   {
     return false;
   }
-  static_dispatch(catbus, Event_NoTarget{}, B, A);
+  static_dispatch(catbus, ROUND_ROBIN, Event_NoTarget{}, B, A);
   std::this_thread::sleep_for(100ms);
   return ok = A.no_target_evt_handled == 1 && B.target_evt_handled == 0;
 }
@@ -291,7 +291,7 @@ bool BasicDynamicDispatch()
   {
     return false;
   }
-  dynamic_dispatch(catbus, Event_WithTarget{ 1 }, A, B);
+  dynamic_dispatch(catbus, ROUND_ROBIN, Event_WithTarget{ 1 }, A, B);
   std::this_thread::sleep_for(100ms);
   return ok =  A.target_evt_handled == 1 && B.target_evt_handled == 0;
 }
@@ -319,7 +319,7 @@ bool FailedDynDispatchNoHandler()
   bool exception_caught{};
   try
   {
-    dynamic_dispatch(catbus, Event_WithTarget{ 2 }, A, B);
+    dynamic_dispatch(catbus, ROUND_ROBIN, Event_WithTarget{ 2 }, A, B);
   }
   catch (dispatch_error&)
   {
@@ -338,7 +338,7 @@ bool FailedDynDispatchNoId()
   bool exception_caught{};
   try
   {
-    dynamic_dispatch(catbus, Event_WithTarget{ 3 }, A, B);
+    dynamic_dispatch(catbus, ROUND_ROBIN, Event_WithTarget{ 3 }, A, B);
   }
   catch (dispatch_error&)
   {
@@ -357,7 +357,7 @@ bool SchedulingAndTaskStealing()
   Consumer_NoId_Waits_NoTargetEvt A;
   Producer P;
   setup_dispatch(catbus, A, P);
-  static_dispatch(catbus, Event_InitProducer{ 0 }, P);
+  static_dispatch(catbus, ROUND_ROBIN, Event_InitProducer{ 0 }, P);
 
   std::this_thread::sleep_for(100ms);
 

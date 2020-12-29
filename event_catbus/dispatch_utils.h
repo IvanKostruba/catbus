@@ -36,6 +36,8 @@ SOFTWARE.
 // handlers they are providing and potentially also target vs. id_ comparison.
 namespace catbus {
 
+constexpr size_t ROUND_ROBIN = -1; 
+
 //--------------------- SFINAE event handler detector
 
 // Check if class T has method 'T::handle(Event evt)' to process event of specific type.
@@ -48,7 +50,7 @@ struct has_handler : std::false_type {};
 
 template<class T, class Event>
 struct has_handler<T, Event, void_t<
-    decltype(std::declval<T>().handle(std::declval<Event>()))>
+    decltype(std::declval<T>().handle(std::declval<Event>(), size_t{}))>
 > : std::true_type {};
 
 //--------------------- SFINAE event target id detector
@@ -91,12 +93,12 @@ struct has_sender<Consumer, void_t<std::enable_if_t<
 
 // This function will instantiate for classes, that have handler given event.
 template <typename Catbus, typename Event, class Consumer>
-inline bool route_event(Catbus& bus, Event& ev, Consumer& c) {
+inline bool route_event(Catbus& bus, size_t q, Event& ev, Consumer& c) {
     if constexpr (has_handler<Consumer, Event>::value && has_id<Consumer>::value) {
         if (c.id_ != ev.target) {
             return false;
         }
-        bus.send(TaskWrapper{&c, std::move(ev)});
+        bus.send(TaskWrapper{&c, std::move(ev)}, q);
         return true;
     }
     return false;
@@ -105,9 +107,9 @@ inline bool route_event(Catbus& bus, Event& ev, Consumer& c) {
 //--------------------- Dynamic runtime dispatcher
 
 template <typename Catbus, typename Event, class Consumer>
-void dynamic_dispatch(Catbus& bus, Event ev, Consumer& c) noexcept(false) {
+inline void dynamic_dispatch(Catbus& bus, size_t q, Event ev, Consumer& c) noexcept(false) {
     static_assert(has_target<Event>::value, "Event does not have 'size_t target' member.");
-    if (!route_event(bus, ev, c)) {
+    if (!route_event(bus, q, ev, c)) {
         throw dispatch_error{ev.target};
     }
 }
@@ -115,10 +117,10 @@ void dynamic_dispatch(Catbus& bus, Event ev, Consumer& c) noexcept(false) {
 // Recursively search parameter pack for types with handlers for given event, that have
 // corresponding id. Call handler for the first match.
 template <typename Catbus, typename Event, class Consumer, class ...Consumers>
-void dynamic_dispatch(Catbus& bus, Event ev, Consumer& c, Consumers&... others) noexcept(false) {
+void dynamic_dispatch(Catbus& bus, size_t q, Event ev, Consumer& c, Consumers&... others) noexcept(false) {
     static_assert(has_target<Event>::value, "Event does not have 'size_t target' member.");
-    if (!route_event(bus, ev, c)) {
-        dynamic_dispatch(bus, std::move(ev), others...);
+    if (!route_event(bus, q, ev, c)) {
+        dynamic_dispatch(bus, q, std::move(ev), others...);
     }
 }
 
@@ -142,12 +144,12 @@ constexpr size_t find_handler_idx(size_t idx = 0) {
 
 // Call handler for first consumer in parameter pack, that capable of handling the event.
 template<typename Catbus, typename Event, class ...Consumers>
-void static_dispatch(Catbus& bus, Event ev, Consumers& ...args) {
+void static_dispatch(Catbus& bus, size_t q, Event ev, Consumers& ...args) {
     constexpr auto consumer_idx = find_handler_idx<Event, Consumers...>();
     static_assert(std::tuple_size<std::tuple<Consumers...>>::value > consumer_idx,
         "Handler not found!");
     std::tuple<Consumers&...> list{ args... };
-    bus.send(TaskWrapper{&std::get<consumer_idx>(list), std::move(ev)});
+    bus.send(TaskWrapper{&std::get<consumer_idx>(list), std::move(ev)}, q);
 }
 
 }; // namespace catbus

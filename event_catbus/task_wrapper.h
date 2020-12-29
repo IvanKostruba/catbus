@@ -7,7 +7,7 @@ namespace catbus {
 
 namespace _detail {
     struct vtable {
-        void (*run)(void* ptr);
+        void (*run)(void* ptr, std::size_t q);
 
         void (*destroy_)(void* ptr);
         void (*clone)(void* storage, const void* ptr);
@@ -16,9 +16,9 @@ namespace _detail {
 
     template<typename Handler, typename Event>
     constexpr vtable vtable_for {
-        [](void* ptr) {
+        [](void* ptr, std::size_t q) {
             auto* p = static_cast<std::pair<Handler, Event>*>(ptr);
-            p->first->handle(std::move(p->second));
+            p->first->handle(std::move(p->second), q);
         },
 
         [](void* ptr) {
@@ -94,8 +94,8 @@ public:
         return *this;
     }
 
-    void run() {
-        vtable_->run(&buf_);
+    void run(std::size_t q) {
+        vtable_->run(&buf_, q);
     }
 
     bool is_valid() const {
