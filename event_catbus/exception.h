@@ -28,23 +28,21 @@ SOFTWARE.
 
 namespace catbus {
 
-  // Dispatching function did not find receiver with id_ equal to target
-  class dispatch_error : public std::exception
-  {
-  public:
+// Dispatching function did not find receiver with id_ equal to target
+class dispatch_error : public std::exception
+{
+public:
     const size_t target_id_;
 
     dispatch_error(size_t target_id) : target_id_{ target_id }
-    {
+    {}
+
+    const char* what() const noexcept override {
+        return description;
     }
 
-    const char* what() const noexcept override
-    {
-      return description;
-    }
-
-  private:
+private:
     const char* description = "No consumers with corresponding id were found.";
-  };
+};
 
 }; // catbus

@@ -114,12 +114,12 @@ public:
   int no_target_evt_handled{ 0 };
   int blocker_received{ 0 };
 
-  void Handle(Event_NoTarget ev)
+  void handle(Event_NoTarget ev)
   {
     ++no_target_evt_handled;
   }
 
-  void Handle(Event_BlockerNoTarget ev)
+  void handle(Event_BlockerNoTarget ev)
   {
     ++blocker_received;
     std::this_thread::sleep_for(500ms);
@@ -137,7 +137,7 @@ public:
   int target_evt_handled{ 0 };
 
   // Even though it has handler, events with target can only be dispatched to consumers with id_.
-  void Handle(Event_WithTarget ev)
+  void handle(Event_WithTarget ev)
   {
     ++target_evt_handled;
   }
@@ -157,12 +157,12 @@ public:
   int target_evt_handled{ 0 };
   int blocker_received{ 0 };
 
-  void Handle(Event_WithTarget ev)
+  void handle(Event_WithTarget ev)
   {
     ++target_evt_handled;
   }
 
-  void Handle(Event_BlockerWithTarget ev)
+  void handle(Event_BlockerWithTarget ev)
   {
     ++blocker_received;
     std::this_thread::sleep_for(500ms);
@@ -181,7 +181,7 @@ public:
   const size_t id_;
   int no_target_evt_handled{ 0 };
 
-  void Handle(Event_NoTarget ev)
+  void handle(Event_NoTarget ev)
   {
     ++no_target_evt_handled;
   }
@@ -200,7 +200,7 @@ public:
   > sender_;
   int event_handled{ 0 };
 
-  void Handle(Event_InitProducer ev)
+  void handle(Event_InitProducer ev)
   {
     if (ev.data == 0)
     {
@@ -237,12 +237,12 @@ public:
   Consumer_Id_Waits_TargetEvt final_consumer_{ 1 };
   EventCatbus<MutexProtectedQueue, 1, 1> processor_;
 
-  void Handle(Event_WithTarget ev)
+  void handle(Event_WithTarget ev)
   {
     dynamic_dispatch(processor_, std::move(ev), final_consumer_);
   }
 
-  void Handle(Event_BlockerWithTarget ev)
+  void handle(Event_BlockerWithTarget ev)
   {
     dynamic_dispatch(processor_, std::move(ev), final_consumer_);
   }

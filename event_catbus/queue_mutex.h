@@ -7,41 +7,35 @@
 
 namespace catbus {
 
-  class MutexProtectedQueue
-  {
-  public:
+class MutexProtectedQueue {
+public:
 
-    void Enqueue(TaskWrapper task)
-    {
+    void enqueue(TaskWrapper task) {
       auto lock = std::unique_lock<std::mutex>{ queue_access_ };
       queue_.push(std::move(task));
     }
 
-    TaskWrapper TryDequeue()
-    {
-      auto lock = std::unique_lock<std::mutex>{ queue_access_, std::defer_lock };
-      if (lock.try_lock())
-      {
-        if (queue_.empty())
-        {
-          return TaskWrapper{};
+    TaskWrapper try_dequeue() {
+        auto lock = std::unique_lock<std::mutex>{ queue_access_, std::defer_lock };
+        if (lock.try_lock()) {
+            if (queue_.empty()) {
+              return TaskWrapper{};
+            }
+            auto result = std::move(queue_.front());
+            queue_.pop();
+            return result;
         }
-        auto result = std::move(queue_.front());
-        queue_.pop();
-        return result;
-      }
-      return TaskWrapper{};
+        return TaskWrapper{};
     }
 
-  size_t Size() const
-  {
-    auto lock = std::unique_lock<std::mutex>{ queue_access_ };
-    return queue_.size();
-  }
+    size_t size() const {
+        auto lock = std::unique_lock<std::mutex>{ queue_access_ };
+        return queue_.size();
+    }
 
-  private:
+private:
     std::queue<TaskWrapper> queue_;
     mutable std::mutex queue_access_;
-  };
+};
 
 }; // namespace catbus

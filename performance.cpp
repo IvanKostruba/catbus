@@ -51,7 +51,7 @@ public:
     std::atomic_long max_time_{0};
     std::atomic_long counter_{0};
 
-    void Handle(Small_NoTarget evt)
+    void handle(Small_NoTarget evt)
     {
         time_type now = std::chrono::high_resolution_clock::now();
         auto waiting_time = interval_type{
@@ -77,7 +77,7 @@ public:
     std::atomic_long max_time_{0};
     std::atomic_long counter_{0};
 
-    void Handle(Medium_NoTarget evt)
+    void handle(Medium_NoTarget evt)
     {
         time_type now = std::chrono::high_resolution_clock::now();
         auto waiting_time = interval_type{
@@ -102,7 +102,7 @@ public:
     std::atomic_long max_time_{0};
     std::atomic_long counter_{0};
 
-    void Handle(LongWait_NoTarget evt)
+    void handle(LongWait_NoTarget evt)
     {
         time_type now = std::chrono::high_resolution_clock::now();
         auto waiting_time = interval_type{
@@ -127,7 +127,7 @@ public:
 
     explicit TargetedEventsConsumer(size_t id) : id_{id} {}
 
-    void Handle(Small_WithTarget evt)
+    void handle(Small_WithTarget evt)
     {
         time_type now = std::chrono::high_resolution_clock::now();
         auto waiting_time = interval_type{
@@ -145,7 +145,7 @@ public:
         }
     }
 
-    void Handle(Medium_WithTarget evt)
+    void handle(Medium_WithTarget evt)
     {
         time_type now = std::chrono::high_resolution_clock::now();
         auto waiting_time = interval_type{
@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
         }
         std::cout << "]\n\n";
     }
-    bus.Stop();
+    bus.stop();
     auto end = std::chrono::high_resolution_clock::now();
     auto count = A.counter_.load(std::memory_order_relaxed);
     auto countB = B.counter_.load(std::memory_order_relaxed);

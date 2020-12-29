@@ -31,12 +31,12 @@ class Sender : public catbus::EventSender<Request>
 public:
   explicit Sender(size_t id) : id_{id}
   {}
-  void Handle(Init event)
+  void handle(Init event)
   { 
     std::cout << "Init received\n";
-    Send( Request{id_} );
+    send( Request{id_} );
   }
-  void Handle(Response event)
+  void handle(Response event)
   { 
     std::cout << "Response received: code " << event.error_code << "\n";
   }
@@ -47,10 +47,10 @@ public:
 class Receiver : public catbus::EventSender<Response>
 {
 public:
-  void Handle(Request req)
+  void handle(Request req)
   { 
     std::cout << "Request received: " << req.data << "\n";
-    Send(Response{req.sender, 200});
+    send(Response{req.sender, 200});
   }
 };
 
@@ -60,10 +60,10 @@ int main(int argc, char** argv) {
   catbus::EventCatbus<catbus::MutexProtectedQueue, 1, 2> bus;
   Sender sender{1};
   Receiver receiver;
-  catbus::setup_dispatch(bus, sender, receiver); // Setting up Send() methods.
+  catbus::setup_dispatch(bus, sender, receiver); // Setting up send() methods.
 
   // Startup
-  catbus::static_dispatch(bus, Init{}, sender); // Send the initial event.
+  catbus::static_dispatch(bus, Init{}, sender); // send the initial event.
   std::this_thread::sleep_for(200ms);
 }
 

@@ -18,7 +18,7 @@ namespace _detail {
     constexpr vtable vtable_for {
         [](void* ptr) {
             auto* p = static_cast<std::pair<Handler, Event>*>(ptr);
-            p->first->Handle(std::move(p->second));
+            p->first->handle(std::move(p->second));
         },
 
         [](void* ptr) {

@@ -38,90 +38,87 @@ namespace catbus {
 // The Queue type must be thread-safe.
 
 template<typename Queue, size_t NQ, size_t NWrk>
-class EventCatbus
-{
-  static_assert(NQ >= 1, "At least one queue is needed to run dispatching.");
-  static_assert(NWrk >= 1, "At least one worker thread is needed to handle events.");
+class EventCatbus {
+    static_assert(NQ >= 1, "At least one queue is needed to run dispatching.");
+    static_assert(NWrk >= 1, "At least one worker thread is needed to handle events.");
 public:
-  EventCatbus() {
-    for(size_t i = 0; i < NWrk; ++i) {
-      workers_[i].Setup(&queues_, i);
+    EventCatbus() {
+        for(size_t i = 0; i < NWrk; ++i) {
+            workers_[i].setup(&queues_, i);
+        }
     }
-  }
 
-  ~EventCatbus() {
-    Stop();
-  }
-
-  void Stop() {
-    for (auto& worker : workers_) {
-      worker.stop_ = true;
+    ~EventCatbus() {
+        stop();
     }
-  }
 
-  // Enqueues tasks with simple round-robin algorithm.
-  void Send(TaskWrapper task) {
-    // std::move is used throughout the library and here as well to avoid copying of events,
-    // this is why it's hard to implement try_enqueue() so we are risking some waiting here.
-    queues_[dispatch_counter_.fetch_add(1, std::memory_order_relaxed) % NQ].Enqueue( std::move( task ) );
-  }
-
-  std::array<size_t, NQ> QueueSizes() const {
-    std::array<size_t, NQ> result;
-    for(size_t i = 0; i < NQ; ++i) {
-      result[i] = queues_[i].Size();
+    void stop() {
+        for (auto& worker : workers_) {
+            worker.stop_ = true;
+        }
     }
-    return result;
-  }
 
-  // TODO: (ideas) potentially there can be special 'high piority' queue with separate workers.
-  // Also Send() method with explicit queue idx might be useful. For example, when there are more
-  // queues than workers, additional queues will be visited when workers will have free time, so
-  // it can be sort of priority mechanism as well.
+    // Enqueues tasks with simple round-robin algorithm.
+    void send(TaskWrapper task) {
+        // std::move is used throughout the library and here as well to avoid copying of events,
+        // this is why it's hard to implement try_enqueue() so we are risking some waiting here.
+        queues_[dispatch_counter_.fetch_add(1, std::memory_order_relaxed) % NQ].enqueue( std::move( task ) );
+    }
 
-  EventCatbus(const EventCatbus& other) = delete;
-  EventCatbus(EventCatbus&& other) = delete;
-  EventCatbus& operator=(const EventCatbus& other) = delete;
-  EventCatbus& operator=(EventCatbus&& other) = delete;
+    std::array<size_t, NQ> QueueSizes() const {
+        std::array<size_t, NQ> result;
+        for(size_t i = 0; i < NQ; ++i) {
+            result[i] = queues_[i].size();
+        }
+        return result;
+    }
+
+    // TODO: (ideas) potentially there can be special 'high piority' queue with separate workers.
+    // Also send() method with explicit queue idx might be useful. For example, when there are more
+    // queues than workers, additional queues will be visited when workers will have free time, so
+    // it can be sort of priority mechanism as well.
+
+    EventCatbus(const EventCatbus& other) = delete;
+    EventCatbus(EventCatbus&& other) = delete;
+    EventCatbus& operator=(const EventCatbus& other) = delete;
+    EventCatbus& operator=(EventCatbus&& other) = delete;
 
 private:
-  struct Worker {
+    struct Worker {
 
-    void Setup(std::array<Queue, NQ>* queues, size_t primary) {
-      thread_ = std::thread(
-        [&queues = *queues,
-        primary = primary,
-        &stop = stop_] () {
-          while (!stop) {
-            for(size_t i = primary; !stop && i < primary + NQ; ++i) {
-              auto task = queues[i % NQ].TryDequeue();
-              if (task.is_valid()) {
-                task.run();
-                break;
-              }
+        void setup(std::array<Queue, NQ>* queues, size_t primary) {
+            thread_ = std::thread(
+                [&queues = *queues, primary = primary, &stop = stop_] () {
+                    while (!stop) {
+                        for(size_t i = primary; !stop && i < primary + NQ; ++i) {
+                            auto task = queues[i % NQ].try_dequeue();
+                            if (task.is_valid()) {
+                                task.run();
+                                break;
+                            }
+                        }
+                    }
+                }
+            );
+        }
+
+        ~Worker() {
+            if (thread_.joinable()) {
+                try {
+                    thread_.join();
+                }
+                catch (std::system_error e) {
+                }
             }
-          }
         }
-      );
-    }
 
-    ~Worker() {
-      if (thread_.joinable()) {
-        try {
-          thread_.join();
-        }
-        catch (std::system_error e) {
-        }
-      }
-    }
+        std::thread thread_;
+        bool stop_{};
+    };
 
-    std::thread thread_;
-    bool stop_{};
-  };
-
-  std::atomic_uint dispatch_counter_{};
-  std::array<Worker, NWrk> workers_;
-  std::array<Queue, NQ> queues_;
+    std::atomic_uint dispatch_counter_{};
+    std::array<Worker, NWrk> workers_;
+    std::array<Queue, NQ> queues_;
 };
 
 }; // namespace catbus
