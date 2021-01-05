@@ -44,7 +44,7 @@ class EventCatbus {
 public:
     EventCatbus() {
         for(size_t i = 0; i < NWrk; ++i) {
-            workers_[i].setup(&queues_, i);
+            workers_[i].setup(&queues_, i % NQ);
         }
     }
 
